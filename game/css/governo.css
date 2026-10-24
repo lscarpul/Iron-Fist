@@ -48,7 +48,7 @@
 .gov-key input, #gov-model {
   flex: 1; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 5px 8px;
 }
-#gov-model { width: 100%; }
+#gov-body select { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 5px 8px; }
 
 table.gov-rel { width: 100%; border-collapse: collapse; font-size: 12px; }
 .gov-rel td { padding: 3px 4px; border-bottom: 1px solid rgba(255,255,255,.05); white-space: nowrap; }

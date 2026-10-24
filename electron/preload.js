@@ -7,5 +7,8 @@ contextBridge.exposeInMainWorld('governoAPI', {
   setKey: key => ipcRenderer.invoke('governo:setKey', key),
   clearKey: () => ipcRenderer.invoke('governo:clearKey'),
   setModel: model => ipcRenderer.invoke('governo:setModel', model),
+  setProvider: p => ipcRenderer.invoke('governo:setProvider', p),
+  setLocal: cfg => ipcRenderer.invoke('governo:setLocal', cfg),
+  localModels: cfg => ipcRenderer.invoke('governo:localModels', cfg),
   send: req => ipcRenderer.invoke('governo:send', req),
 });

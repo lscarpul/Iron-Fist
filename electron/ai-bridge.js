@@ -1,12 +1,15 @@
 'use strict';
-// Ponte verso l'API di Claude per il "Governo" (IA testuale). Vive nel processo principale:
-// la chiave API non arriva mai alla pagina di gioco.
-// Chiave: variabile d'ambiente ANTHROPIC_API_KEY se presente, altrimenti quella inserita nel gioco,
-// salvata cifrata con safeStorage (DPAPI su Windows) nella cartella dati dell'app.
+// Ponte verso il modello che fa da "Governo" (IA testuale). Vive nel processo principale.
+// Due fornitori:
+// - locale (predefinito): un modello sul PC del giocatore tramite Ollama o un server compatibile OpenAI
+//   (vedi local-llm.js);
+// - Claude: API di Anthropic. Chiave da ANTHROPIC_API_KEY se presente, altrimenti quella inserita nel
+//   gioco, salvata cifrata con safeStorage (DPAPI su Windows). La chiave non arriva mai alla pagina.
 const { ipcMain, safeStorage, app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk').default;
+const local = require('./local-llm');
 
 const MODELS = [
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 (consigliato)', fallback: true },
@@ -35,6 +38,12 @@ function currentKey() {
   const k = savedKey();
   return k ? { key: k, source: 'saved' } : { key: null, source: null };
 }
+function localConfig() {
+  const l = readSettings().local || {};
+  const kind = l.kind === 'openai' ? 'openai' : 'ollama';
+  return { kind, url: l.url || local.PRESETS[kind].url, model: l.model || '' };
+}
+const currentProvider = () => readSettings().provider === 'claude' ? 'claude' : 'local';
 function currentModel() {
   const m = readSettings().model;
   return MODELS.some(x => x.id === m) ? m : DEFAULT_MODEL;
@@ -48,7 +57,12 @@ function getClient(key) {
 
 function status() {
   const { source } = currentKey();
-  return { hasKey: !!source, source, model: currentModel(), models: MODELS.map(({ id, label }) => ({ id, label })), canSave: safeStorage.isEncryptionAvailable() };
+  const provider = currentProvider(), lc = localConfig();
+  return {
+    provider, ready: provider === 'local' ? !!lc.model : !!source,
+    local: lc, presets: local.PRESETS,
+    hasKey: !!source, source, model: currentModel(), models: MODELS.map(({ id, label }) => ({ id, label })), canSave: safeStorage.isEncryptionAvailable(),
+  };
 }
 
 function errorInfo(e) {
@@ -64,13 +78,18 @@ function errorInfo(e) {
 // Una singola chiamata all'API. Il ciclo degli strumenti gira nella pagina di gioco,
 // perché è lì che vivono lo stato della partita e le azioni.
 async function send(_e, req) {
+  if (!req || typeof req.system !== 'string' || !Array.isArray(req.messages) || !Array.isArray(req.tools)) {
+    return { ok: false, kind: 'internal', error: 'Richiesta non valida.' };
+  }
+  if (currentProvider() === 'local') {
+    const lc = localConfig();
+    if (!lc.model) return { ok: false, kind: 'nokey', error: 'Scegli il modello locale nelle impostazioni.' };
+    return local.send(lc, req);
+  }
   const { key } = currentKey();
   if (!key) return { ok: false, kind: 'nokey', error: 'Manca la chiave API.' };
   const model = currentModel();
   const info = MODELS.find(m => m.id === model);
-  if (!req || typeof req.system !== 'string' || !Array.isArray(req.messages) || !Array.isArray(req.tools)) {
-    return { ok: false, kind: 'internal', error: 'Richiesta non valida.' };
-  }
   const betas = ['thinking-binding-controls-2026-08-01'];
   const params = {
     model,
@@ -117,6 +136,24 @@ function register() {
     writeSettings(s);
     return { ok: true, status: status() };
   });
+  ipcMain.handle('governo:setProvider', (_e, p) => {
+    if (p !== 'local' && p !== 'claude') return { ok: false, error: 'Fornitore sconosciuto' };
+    const s = readSettings();
+    s.provider = p;
+    writeSettings(s);
+    return { ok: true, status: status() };
+  });
+  ipcMain.handle('governo:setLocal', (_e, cfg) => {
+    cfg = cfg || {};
+    const kind = cfg.kind === 'openai' ? 'openai' : 'ollama';
+    const url = String(cfg.url || local.PRESETS[kind].url).trim();
+    if (!/^https?:\/\/[^\s]+$/.test(url)) return { ok: false, error: 'Indirizzo non valido (es. http://localhost:11434)' };
+    const s = readSettings();
+    s.local = { kind, url, model: String(cfg.model || '').trim().slice(0, 200) };
+    writeSettings(s);
+    return { ok: true, status: status() };
+  });
+  ipcMain.handle('governo:localModels', (_e, cfg) => local.listModels({ ...localConfig(), ...(cfg || {}) }));
   ipcMain.handle('governo:send', send);
 }
 

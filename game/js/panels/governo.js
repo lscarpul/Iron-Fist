@@ -1,8 +1,8 @@
 'use strict';
 
-// "Governo": il giocatore dà ordini diplomatici ed economici in linguaggio naturale e Claude
-// li interpreta ed esegue con le azioni registrate in GameActions. Le chiamate all'API passano
-// dal processo principale di Electron (window.governoAPI), che custodisce la chiave.
+// "Governo": il giocatore dà ordini diplomatici ed economici in linguaggio naturale e un modello
+// (locale via Ollama, oppure Claude) li interpreta ed esegue con le azioni registrate in GameActions.
+// Le chiamate passano dal processo principale di Electron (window.governoAPI).
 
 const Gov = {
   open: false, view: 'chat', busy: false,
@@ -55,6 +55,7 @@ const Gov = {
       if (e.key === 'Escape') this.toggle(false);
     });
     w.addEventListener('keydown', e => e.stopPropagation());
+    $('gov-body').addEventListener('change', e => { if (e.target.id) this.change(e.target.id, e.target.value); });
     $('gov-body').addEventListener('click', e => {
       const el = e.target.closest('[data-gov]');
       if (el) this.action(el.dataset.gov, el);
@@ -91,6 +92,7 @@ const Gov = {
     const api = this.api();
     this.status = api ? await api.status() : null;
     this.render();
+    if (this.status && this.status.provider === 'local' && !this.localModels) this.scanLocal();
   },
 
   ensureGame() {
@@ -119,7 +121,7 @@ const Gov = {
   renderChat() {
     let h = '';
     if (!this.api()) h += `<div class="gl err">Il governo a parole funziona solo nell'app desktop di Iron Fist.</div>`;
-    else if (this.status && !this.status.hasKey) h += `<div class="gl err">Manca la chiave API di Claude. <a href="#" data-gov="toset">Inseriscila nelle impostazioni ⚙</a>.</div>`;
+    else if (this.status && !this.status.ready) h += `<div class="gl err">${this.status.provider === 'local' ? 'Nessun modello locale scelto. Avvia Ollama e' : 'Manca la chiave API di Claude.'} <a href="#" data-gov="toset">apri le impostazioni ⚙</a>.</div>`;
     for (const l of this.lines) {
       if (l.who === 'act') h += `<div class="gl act ${l.ok ? 'ok' : 'ko'}">${l.ok ? '✔' : '✖'} ${esc(l.text)}</div>`;
       else h += `<div class="gl ${l.who}">${l.who === 'gov' ? richText(l.text) : esc(l.text).replace(/\n/g, '<br>')}</div>`;
@@ -158,8 +160,27 @@ const Gov = {
     const api = this.api(), s = this.status;
     if (!api) return `<p>Disponibile solo nell'app desktop.</p>`;
     if (!s) return `<p>Caricamento…</p>`;
-    const src = s.source === 'env' ? 'variabile d\'ambiente ANTHROPIC_API_KEY' : s.source === 'saved' ? 'chiave salvata (cifrata) su questo PC' : 'nessuna';
-    return `
+    const lc = s.local;
+    let h = `
+      <h4>Chi fa da governo</h4>
+      <select id="gov-provider">
+        <option value="local" ${s.provider === 'local' ? 'selected' : ''}>Modello locale sul tuo PC (gratis)</option>
+        <option value="claude" ${s.provider === 'claude' ? 'selected' : ''}>Claude, via API di Anthropic (a pagamento)</option>
+      </select>`;
+    if (s.provider === 'local') {
+      const models = this.localModels || [];
+      const opts = [...new Set([lc.model, ...models].filter(Boolean))];
+      h += `
+      <h4>Server locale</h4>
+      <select id="gov-lkind">${Object.entries(s.presets).map(([k, v]) => `<option value="${k}" ${k === lc.kind ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
+      <div class="gov-key"><input id="gov-lurl" value="${esc(lc.url)}" spellcheck="false"><button data-gov="lscan">Cerca modelli</button></div>
+      <h4>Modello</h4>
+      <select id="gov-lmodel">${opts.length ? opts.map(m => `<option ${m === lc.model ? 'selected' : ''}>${esc(m)}</option>`).join('') : '<option value="">nessun modello trovato</option>'}</select>
+      <p id="gov-lmsg" class="hint">${esc(this.localMsg || '')}</p>
+      <p class="hint">Con Ollama avviato, i modelli scaricati compaiono qui (es. <code>ollama pull qwen2.5:7b</code>). Servono modelli che supportano le chiamate di funzione: Qwen 2.5/3, Llama 3.1+, Mistral. Più il modello è grande, meglio capisce gli ordini; un 7-8B va bene, sotto i 4B sbaglia spesso.</p>`;
+    } else {
+      const src = s.source === 'env' ? 'variabile d\'ambiente ANTHROPIC_API_KEY' : s.source === 'saved' ? 'chiave salvata (cifrata) su questo PC' : 'nessuna';
+      h += `
       <h4>Chiave API di Claude</h4>
       <p>In uso: <b>${src}</b></p>
       ${s.source === 'env' ? '<p class="hint">Finché la variabile ANTHROPIC_API_KEY è impostata ha la precedenza sulla chiave salvata.</p>' : ''}
@@ -168,10 +189,28 @@ const Gov = {
       ${s.source === 'saved' ? '<button data-gov="clearkey">Elimina la chiave salvata</button>' : ''}
       <p id="gov-keymsg" class="hint"></p>
       <h4>Modello</h4>
-      <select id="gov-model">${s.models.map(m => `<option value="${m.id}" ${m.id === s.model ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select>
+      <select id="gov-model">${s.models.map(m => `<option value="${m.id}" ${m.id === s.model ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select>`;
+    }
+    return h + `
       <h4>Conversazione</h4>
       <button data-gov="reset">Ricomincia la conversazione</button>
       <p class="hint">Il governo ricorda gli scambi precedenti di questa partita. Ricominciare la svuota (non annulla le azioni già fatte).</p>`;
+  },
+
+  // cerca i modelli sul server locale; se non ne è scelto nessuno prende il primo (preferendo Qwen)
+  async scanLocal(cfg) {
+    const api = this.api();
+    const r = await api.localModels(cfg);
+    if (!r.ok) { this.localModels = []; this.localMsg = r.error; this.render(); return; }
+    this.localModels = r.models;
+    this.localMsg = r.models.length ? `${r.models.length} modelli trovati.` : 'Il server risponde ma non ha modelli: scaricane uno (es. ollama pull qwen2.5:7b).';
+    const lc = { ...this.status.local, ...(cfg || {}) };
+    if ((!lc.model || !r.models.includes(lc.model)) && r.models.length) {
+      lc.model = r.models.find(m => /qwen/i.test(m)) || r.models[0];
+      const s = await api.setLocal(lc);
+      if (s.ok) this.status = s.status;
+    }
+    this.render();
   },
 
   async action(name, el) {
@@ -186,9 +225,26 @@ const Gov = {
       return;
     }
     if (name === 'clearkey') { const r = await api.clearKey(); this.status = r.status; this.render(); return; }
+    if (name === 'lscan') { await this.scanLocal({ kind: $('gov-lkind').value, url: $('gov-lurl').value.trim() }); return; }
   },
 
-  // ---------- conversazione con Claude ----------
+  async change(id, value) {
+    const api = this.api();
+    let r = null;
+    if (id === 'gov-provider') { r = await api.setProvider(value); this.tools = null; if (value === 'local') setTimeout(() => this.scanLocal(), 0); }
+    else if (id === 'gov-model') r = await api.setModel(value);
+    else if (id === 'gov-lkind') {
+      const kind = value;
+      r = await api.setLocal({ kind, url: this.status.presets[kind].url, model: '' });
+      if (r.ok) { this.status = r.status; this.scanLocal(); return; }
+    } else if (id === 'gov-lmodel') r = await api.setLocal({ ...this.status.local, model: value });
+    else if (id === 'gov-lurl') { r = await api.setLocal({ ...this.status.local, url: value.trim() }); if (r.ok) { this.status = r.status; this.scanLocal(); return; } }
+    if (!r) return;
+    if (r.ok) this.status = r.status; else this.localMsg = r.error;
+    this.render();
+  },
+
+  // ---------- conversazione con il modello ----------
   buildSystem() {
     const p = C(S.player);
     return `Sei il governo di ${p.name} in Iron Fist, un gioco di grande strategia ambientato in Europa tra il 1936 e il 1946 sul modello di Hearts of Iron IV. Il giocatore è il capo della nazione: ti scrive ordini, domande e messaggi in italiano, in linguaggio naturale. Tu interpreti cosa vuole e lo realizzi con gli strumenti a disposizione, che sono le uniche azioni diplomatiche ed economiche possibili nel gioco.
@@ -211,7 +267,7 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
     const api = this.api();
     if (!api) return;
     if (!this.status) await this.refreshStatus();
-    if (!this.status?.hasKey) { this.setView('set'); return; }
+    if (!this.status?.ready) { this.setView('set'); return; }
     this.ensureGame();
     inp.value = '';
     this.lines.push({ who: 'me', text });
