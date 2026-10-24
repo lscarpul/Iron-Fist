@@ -54,7 +54,7 @@ function anAskRebase(wings) {
 }
 
 UI.registerPanel({
-  id: 'aviazione', title: 'Aviazione', icon: '✈', group: 'military', order: 20, width: 480,
+  id: 'aviazione', title: 'Aviazione', icon: 'air', group: 'military', order: 20, width: 480,
 
   render(p) {
     const A = S.an, code = p.code;

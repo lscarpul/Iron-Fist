@@ -224,7 +224,7 @@ FocusUI.init();
 
 if (typeof UI.registerPanel === 'function') {
   UI.registerPanel({
-    id: 'focus', title: 'Focus nazionale', icon: '🌳', group: 'state', order: 15,
+    id: 'focus', title: 'Focus nazionale', icon: 'focus', group: 'state', order: 15,
     render: p => FocusUI.summary(p),
     actions: {
       openTree: () => FocusUI.show(),

@@ -255,7 +255,7 @@ const EconUI = {
     UI.registerPanel({ id: 'produzione', title: 'Produzione', icon: 'factory', group: 'state', order: 40, width: 480,
       render: p => this.linesHtml(p) + this.mioHtml(p), actions,
       badge: p => (Econ.landMil(p) - Econ.assignedMil(p)) || null });
-    UI.registerPanel({ id: 'costruzione', title: 'Costruzione', icon: 'build', group: 'state', order: 41, width: 440,
+    UI.registerPanel({ id: 'costruzione', title: 'Costruzione', icon: 'construction', group: 'state', order: 41, width: 440,
       render: p => this.constructionHtml(p), actions });
     UI.registerPanel({ id: 'commercio', title: 'Commercio', icon: 'trade', group: 'state', order: 42, width: 480,
       render: p => this.tradeLawHtml(p) + this.tradeHtml(p) + this.marketHtml(p), actions });

@@ -3,7 +3,7 @@
 // Pannello Occupazione: territori occupati per paese, resistenza, conformità, leggi e guarnigione.
 
 UI.registerPanel({
-  id: 'occupazione', title: 'Occupazione', icon: 'occupation', group: 'state', order: 95, width: 480,
+  id: 'occupazione', title: 'Occupazione', icon: 'fort', group: 'state', order: 95, width: 480,
   render(p) {
     const pc = S.player, st = S.occStats[pc];
     let h = `<h3>Territori occupati</h3>`;

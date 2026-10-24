@@ -14,7 +14,7 @@ document.addEventListener('change', e => {
 });
 
 UI.registerPanel({
-  id: 'intelligence', title: 'Intelligence', icon: 'intel', group: 'state', order: 90, width: 480,
+  id: 'intelligence', title: 'Intelligence', icon: 'intelligence', group: 'state', order: 90, width: 480,
   badge() { return S && Intel.freeAgents(S.player) || null; },
   render(p) {
     const pc = S.player, g = Intel.agency(pc);

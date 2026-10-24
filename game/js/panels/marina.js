@@ -27,7 +27,7 @@ function anAskFleetMission(f) {
 }
 
 UI.registerPanel({
-  id: 'marina', title: 'Marina', icon: '⚓', group: 'military', order: 15, width: 480,
+  id: 'marina', title: 'Marina', icon: 'navy', group: 'military', order: 15, width: 480,
 
   render(p) {
     const A = S.an, code = p.code;
