@@ -358,17 +358,19 @@ function computeSupply(code) {
   };
   let caps = info.hubs.map(H => H.cap);
   let left = allocate(caps);
-  // 5) carico sulle ferrovie condivise: le linee sature riducono la consegna a tutti gli hub a valle
+  // 5) carico sulle ferrovie condivise: le linee di raccordo sature (le ultime FEEDER_STEPS tratte prima
+  //    di ogni hub) riducono la consegna a tutti gli hub che servono. Le dorsali hanno linee parallele
+  //    che il percorso unico non vede, quindi la congestione si conta solo vicino al fronte.
   const load = new Map();
   info.hubs.forEach((H, h) => {
     if (H.via !== 'ferrovia') return;
     const draw = caps[h] - left[h];
-    for (let u = H.hub.tile; u !== src && prev[u] >= 0; u = prev[u]) load.set(u, (load.get(u) || 0) + draw);
+    for (let u = H.hub.tile, k = 0; k < FEEDER_STEPS && u !== src && prev[u] >= 0; u = prev[u], k++) load.set(u, (load.get(u) || 0) + draw);
   });
   let saturated = false;
   info.hubs.forEach(H => {
     let f = 1;
-    if (H.via === 'ferrovia') for (let u = H.hub.tile; u !== src && prev[u] >= 0; u = prev[u]) f = Math.min(f, railCap(u, prev[u], src) / Math.max(1e-6, load.get(u) || 0));
+    if (H.via === 'ferrovia') for (let u = H.hub.tile, k = 0; k < FEEDER_STEPS && u !== src && prev[u] >= 0; u = prev[u], k++) f = Math.min(f, railCap(u, prev[u], src) / Math.max(1e-6, load.get(u) || 0));
     H.railFactor = Math.min(1, f);
     if (f < 1) saturated = true;
   });

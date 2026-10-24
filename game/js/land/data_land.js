@@ -107,6 +107,7 @@ const W_CLEAR = 0, W_RAIN = 1, W_MUD = 2, W_SNOW = 3, W_DEEP = 4;
 
 // ---------- ferrovie, hub, camion ----------
 const RAIL_CAP = [0, 15, 25, 40, 60, 85];   // rifornimenti/giorno trasportabili per livello di ferrovia
+const FEEDER_STEPS = 5;                   // tratte prima di un hub in cui si conta la saturazione
 const HUB_MAX = 40;                       // capacità massima di un hub
 const CAPITAL_SUPPLY = 60;                // rifornimenti generati nella capitale
 const FLOW_LOSS = { cavalli: 0.25, camion: 0.15 }; // perdita di flusso per esagono
