@@ -73,17 +73,17 @@ function hasHostile(ti, owner) {
   for (const d of a) if (!d.dead && atWar(d.owner, owner)) return true;
   return false;
 }
-function speedOf(d) { return UNIT_TYPES[d.type].speed * (1 + C(d.owner).speedBonus); }
+function speedOf(d) { return UNIT_TYPES[d.type].speed * (1 + C(d.owner).speedBonus) * divSpeedMul(d); }
 function atkValue(d, ti) {
   const ut = UNIT_TYPES[d.type];
-  let v = ut.atk * (1 + C(d.owner).atkBonus) * d.str * (0.4 + 0.6 * d.org / ut.org);
+  let v = ut.atk * (1 + C(d.owner).atkBonus) * divAtkMul(d) * d.str * (0.4 + 0.6 * d.org / ut.org);
   if (d.type === 'arm' && ti != null) v *= TERRAIN[S.tiles[ti].terrain].arm;
   if (!S.tiles[d.tile].land) v *= 0.5; // sbarco dal mare
   return v;
 }
 function defValueOf(d) {
   const ut = UNIT_TYPES[d.type];
-  return ut.def * (1 + C(d.owner).defBonus) * d.str * (0.4 + 0.6 * d.org / ut.org);
+  return ut.def * (1 + C(d.owner).defBonus) * divDefMul(d) * d.str * (0.4 + 0.6 * d.org / ut.org);
 }
 function defValue(ti, vsOwner) {
   const a = S.byTile.get(ti);
@@ -160,6 +160,7 @@ function newGame(player) {
       capital: map.capitals[code], tiles: 0, slot: slot++ % 3, divCounter: 0,
     };
     S.countries[code] = c;
+    initResearch(c, def);
     if (def.faction) { c.faction = def.faction; S.factions[def.faction].members.push(code); }
   }
   countTiles();
@@ -193,6 +194,7 @@ function tick() {
   countTiles();
   for (const k in S.countries) if (S.countries[k].alive) economy(S.countries[k]);
   militaryStep();
+  researchTick();
   for (const k in S.countries) {
     const c = S.countries[k];
     if (c.alive && k !== S.player && (S.day + c.slot) % 3 === 0) aiThink(c);
@@ -202,7 +204,7 @@ function tick() {
   UI.dirty = true;
 }
 
-function factoryCap(c) { return Math.floor(c.tiles * 0.45) + 12; }
+function factoryCap(c) { return Math.floor(c.tiles * 0.45) + 12 + c.capBonus; }
 
 function economy(c) {
   c.pp = Math.min(999, c.pp + c.ppGain);
@@ -211,7 +213,7 @@ function economy(c) {
   const isP = c.code === S.player;
   if (c.construction.length) {
     const j = c.construction[0];
-    j.prog += Math.max(1, c.civ) * 0.15;
+    j.prog += Math.max(1, c.civ) * 0.15 * (1 + c.constructionBonus);
     if (j.prog >= j.cost) {
       c[j.type]++;
       c.construction.shift();
@@ -228,6 +230,7 @@ function economy(c) {
       if (isP) log(`${divName(d)} è pronta per il combattimento.`, 'good');
     }
   }
+  researchStep(c);
   if (c.focus) {
     if (--c.focusDays <= 0) {
       const f = FOCUS_BY_ID[c.focus];
@@ -332,7 +335,7 @@ function resolveCombat(ti, atk) {
   D *= 0.85 + Math.random() * 0.3;
   const perD = A * 0.5 / defs.length, perA = D * 0.35 / atk.length;
   for (const d of defs) { d.org = Math.max(0, d.org - perD); d.str -= perD * 0.0035; d.combat = true; }
-  for (const d of atk) { d.org = Math.max(0, d.org - perA); d.str -= perA * 0.0035; }
+  for (const d of atk) { const dmg = perA / divBreakMul(d); d.org = Math.max(0, d.org - dmg); d.str -= dmg * 0.0035; }
   S.battles.push({ to: ti, from: [...new Set(atk.map(d => d.tile))] });
   for (const d of [...defs, ...atk]) {
     if (d.str < 0.05) {
@@ -467,7 +470,7 @@ function checkCapitulations() {
   for (const code in S.countries) {
     const c = S.countries[code];
     if (!c.alive || !tot[code] || !enemiesOf(code).length) continue;
-    const ratio = (held[code] || 0) / tot[code];
+    const ratio = (held[code] || 0) / tot[code] - c.nukeShock;
     const capLost = !allied(S.tiles[c.capital].ctrl, code);
     if (ratio < 0.33 || (capLost && ratio < 0.55)) capitulate(code);
   }

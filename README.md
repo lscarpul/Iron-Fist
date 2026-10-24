@@ -30,6 +30,9 @@ Per pubblicare una versione: aggiorna `version` in `package.json`, poi crea e in
 - **Tempo reale con pausa** (Spazio, velocità 1–5), dal 1° gennaio 1936.
 - **Economia**: fabbriche civili (costruiscono) e militari (producono equipaggiamento), manodopera, potere politico.
 - **Focus nazionali**: industria, riarmo, dottrine, corazzati, mobilitazione…
+- **Ricerca** (scheda Ricerca): 2–3 slot, tecnologie con anno storico e penalità d'anticipo (+200% di tempo per anno), bonus di ricerca dai focus che annullano la penalità.
+- **Dottrine terrestri**: Guerra di movimento, Potenza di fuoco superiore, Grande piano di battaglia, Assalto di massa, sbloccate con l'esperienza dell'esercito; trinceramento e pianificazione per le divisioni ferme.
+- **Nucleare**: Ricerca atomica, reattore, bomba atomica (1945), Progetto Manhattan.
 - **Esercito**: fanteria e corazzate, organizzazione e forza, rinforzi, ritirate, accerchiamenti, sbarchi dal mare.
 - **Diplomazia**: dichiarazioni di guerra, garanzie, fazioni (Alleati, Asse, Comintern o la tua).
 - **Eventi storici**: Anschluss, Monaco, Polonia 1939, Weserübung, Barbarossa…
@@ -46,6 +49,8 @@ Per pubblicare una versione: aggiorna `version` in `package.json`, poi crea e in
 | `game/js/map.js` | generazione della griglia esagonale e del terreno |
 | `game/js/game.js` | stato, ciclo giornaliero, economia, combattimento, diplomazia |
 | `game/js/ai.js` | intelligenza artificiale delle nazioni |
+| `game/js/research.js` | tecnologie, dottrine terrestri, armi nucleari (logica e IA) |
+| `game/js/panels/ricerca.js` | scheda Ricerca (tecnologie, dottrine, nucleare) |
 | `game/js/render.js` | disegno della mappa su canvas |
 | `game/js/ui.js` | pannelli, input mouse/tastiera, finestre |
 | `game/js/main.js` | schermata iniziale e loop principale |
