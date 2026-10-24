@@ -159,6 +159,7 @@ function newGame(player) {
       construction: [], training: [], faction: null, alive: true,
       capital: map.capitals[code], tiles: 0, slot: slot++ % 3, divCounter: 0,
     };
+    initFocusState(c);
     S.countries[code] = c;
     if (def.faction) { c.faction = def.faction; S.factions[def.faction].members.push(code); }
   }
@@ -202,7 +203,7 @@ function tick() {
   UI.dirty = true;
 }
 
-function factoryCap(c) { return Math.floor(c.tiles * 0.45) + 12; }
+function factoryCap(c) { return Math.floor(c.tiles * 0.45) + 12 + (c.extraSlots || 0); }
 
 function economy(c) {
   c.pp = Math.min(999, c.pp + c.ppGain);
@@ -211,7 +212,7 @@ function economy(c) {
   const isP = c.code === S.player;
   if (c.construction.length) {
     const j = c.construction[0];
-    j.prog += Math.max(1, c.civ) * 0.15;
+    j.prog += Math.max(1, c.civ) * 0.15 * (1 + modOf(c, 'construction_speed'));
     if (j.prog >= j.cost) {
       c[j.type]++;
       c.construction.shift();
@@ -228,15 +229,7 @@ function economy(c) {
       if (isP) log(`${divName(d)} è pronta per il combattimento.`, 'good');
     }
   }
-  if (c.focus) {
-    if (--c.focusDays <= 0) {
-      const f = FOCUS_BY_ID[c.focus];
-      f.apply(c);
-      c.done.add(f.id);
-      c.focus = null;
-      if (isP) log(`Focus nazionale completato: ${f.name}.`, 'good');
-    }
-  }
+  focusDay(c);
 }
 
 function spawnTile(c) {
@@ -262,17 +255,6 @@ function recruit(c, type) {
   const ut = UNIT_TYPES[type];
   c.equipment -= ut.eq; c.manpower -= ut.mp;
   c.training.push({ type, days: ut.days, total: ut.days });
-  return true;
-}
-function focusAvailable(c, f) {
-  if (c.done.has(f.id) || c.focus === f.id) return false;
-  if (f.req && !f.req.every(r => c.done.has(r) || (r === 'tank' && c.armorTech))) return false;
-  return f.avail ? f.avail(c) : true;
-}
-function startFocus(c, id) {
-  const f = FOCUS_BY_ID[id];
-  if (c.focus || !focusAvailable(c, f)) return false;
-  c.focus = id; c.focusDays = f.days;
   return true;
 }
 
