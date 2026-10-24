@@ -1,0 +1,18 @@
+/* Guerra terrestre: sotto-schede, progettista divisioni, tabelle statistiche */
+.lsub { display: flex; flex-wrap: wrap; gap: 2px; margin: 4px 0 8px; }
+.lsub button { flex: 1; padding: 4px 4px; font-size: 11px; border-radius: 2px; }
+.lsub button.on, .lchips button.on { background: linear-gradient(#8a6d2a, #6a521d); border-color: var(--gold, #d9b45a); }
+.lchips { display: flex; flex-wrap: wrap; gap: 3px; margin: 4px 0; }
+.lchips button { padding: 3px 6px; font-size: 11px; }
+.lgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin: 4px 0; }
+.lslot { aspect-ratio: 1 / 0.8; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: #121417; border: 1px dashed #3a414b; border-radius: 3px; cursor: pointer; font-size: 16px; color: #555; }
+.lslot small { font-size: 9px; color: #9a978c; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lslot.full { background: #252a31; border-style: solid; color: inherit; }
+.lslot.chg { border-color: #d9b45a; }
+.lslot:hover { border-color: #e8f0ff; }
+table.ltbl { width: 100%; border-collapse: collapse; font-size: 11px; margin: 4px 0; }
+table.ltbl td { padding: 2px 4px; border-bottom: 1px solid #2a2f36; }
+table.ltbl td:nth-child(odd) { color: #9a978c; }
+table.ltbl td:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
+.bar.bad i { background: linear-gradient(90deg, #7a2a22, #e0503c); }

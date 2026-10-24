@@ -404,6 +404,7 @@ const Econ = {
   pay(c, type, frac = 1) {
     const n = this.needsOf(type);
     for (const f in n) c.stock[f] = Math.max(0, (c.stock[f] || 0) - n[f] * frac);
+    return true;
   },
   addStock(c, fam, units, q) {
     const s = c.stock[fam] || 0;

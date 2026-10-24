@@ -73,3 +73,13 @@ Per pubblicare una versione: aggiorna `version` in `package.json`, poi crea e in
 - Salvataggio/caricamento della partita
 - Ricerca tecnologica, rifornimenti, marina e aviazione
 - Icona dell'app
+
+## Guerra terrestre e logistica (stile HOI4)
+
+Codice in `game/js/land/` (regole) e `game/js/panels/` (schede Esercito e Logistica).
+
+- **Division Designer**: griglia 5×5 di battaglioni di linea (fanteria, artiglieria, anticarro, contraerea, cavalleria, motorizzata, meccanizzata, carri, alpini, marines, paracadutisti) più 5 compagnie di supporto. Le statistiche si calcolano come in HOI4 (attacchi e difese sommati, organizzazione media, corazza 30% max + 70% media, perforazione 40% max + 60% media). Modificare un modello costa esperienza dell'esercito.
+- **Progettista carri**: telaio, cannone, ruolo (carro, cacciacarri, semovente), corazza, motore, accessori; l'affidabilità decide guasti e logorio.
+- **Combattimento**: 24 round orari al giorno con tiri di dado; attacco molle/duro contro difesa (chi difende) o sfondamento (chi attacca), colpi al 10% se assorbiti e al 40% oltre; corazza non perforata = danni dimezzati; larghezza di fronte per terreno (pianura 70+35 per direzione…) con penalità di sovraffollamento; trinceramento e pianificazione.
+- **Logistica**: i rifornimenti partono dalla capitale, viaggiano su ferrovie (livelli 1-5, linee che si saturano) fino agli hub e da lì a cavallo o in camion. Fango, neve e infrastrutture cambiano raggio e velocità. Senza rifornimenti: logorio, niente recupero di organizzazione, fino a -80% ai danni.
+- **Comando**: generali e feldmarescialli storici con abilità e tratti, armate da 24 divisioni, potere di comando per promozioni e tratti, forze speciali con limite di battaglioni.

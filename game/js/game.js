@@ -61,9 +61,10 @@ function remDivFromTile(d) {
   if (!a.length) S.byTile.delete(d.tile);
 }
 function moveDiv(d, to) { remDivFromTile(d); d.tile = to; addDivToTile(d); }
-function createDiv(owner, type, tile) {
+function createDiv(owner, type, tile, tpl) {
   const c = C(owner);
-  const d = { id: S.nextId++, num: ++c.divCounter, owner, type, tile, str: 1, org: UNIT_TYPES[type].org, path: [], prog: 0, combat: false, dead: false };
+  const d = { id: S.nextId++, num: ++c.divCounter, owner, type, tile, str: 1, org: 0, path: [], prog: 0, combat: false, dead: false };
+  initDivLand(d, tpl ?? type);
   S.divs.push(d);
   addDivToTile(d);
   return d;
@@ -74,32 +75,14 @@ function destroyDiv(d) {
   d.dead = true;
   d.path = [];
 }
-function divName(d) { return `${d.num}ª ${UNIT_TYPES[d.type].name}`; }
+function divName(d) { return `${d.num}ª ${tplOf(d).name}`; }
 function hasHostile(ti, owner) {
   const a = S.byTile.get(ti);
   if (!a) return false;
   for (const d of a) if (!d.dead && atWar(d.owner, owner)) return true;
   return false;
 }
-function speedOf(d) { return UNIT_TYPES[d.type].speed * (1 + C(d.owner).speedBonus) * divSpeedMul(d) * Econ.fuelMod(d.owner, d.type); }
-function atkValue(d, ti) {
-  const ut = UNIT_TYPES[d.type];
-  let v = ut.atk * (1 + C(d.owner).atkBonus) * divAtkMul(d) * d.str * (0.4 + 0.6 * d.org / ut.org) * Econ.qualityMod(d.owner, d.type) * Econ.fuelMod(d.owner, d.type);
-  if (d.type === 'arm' && ti != null) v *= TERRAIN[S.tiles[ti].terrain].arm;
-  if (!S.tiles[d.tile].land) v *= 0.5; // sbarco dal mare
-  return v;
-}
-function defValueOf(d) {
-  const ut = UNIT_TYPES[d.type];
-  return ut.def * (1 + C(d.owner).defBonus) * divDefMul(d) * d.str * (0.4 + 0.6 * d.org / ut.org) * Econ.qualityMod(d.owner, d.type);
-}
-function defValue(ti, vsOwner) {
-  const a = S.byTile.get(ti);
-  if (!a) return 0;
-  let D = 0;
-  for (const d of a) if (!d.dead && atWar(d.owner, vsOwner)) D += defValueOf(d);
-  return D * TERRAIN[S.tiles[ti].terrain].def;
-}
+// speedOf, atkValue, defValueOf, defValue: vedi land/combat.js
 
 // ---------- percorsi ----------
 function passable(owner, t, friendlyOnly) {
@@ -172,6 +155,8 @@ function newGame(player) {
     if (def.faction) { c.faction = def.faction; S.factions[def.faction].members.push(code); }
   }
   countTiles();
+  for (const code in S.countries) { initLandCountry(S.countries[code]); initCommand(S.countries[code]); }
+  landInitMap();
   Econ.init();
   Diplo.init(); Intel.init(); Occupation.init();
   for (const code in S.countries) {
@@ -185,7 +170,12 @@ function newGame(player) {
       const t = own[Math.floor(k * own.length / total)];
       createDiv(code, k < def.arm ? 'arm' : 'inf', t.i);
     }
+    c.trucks = c.major ? 600 + def.mil * 60 : 80 + def.mil * 20;
+    c.motorHubs = [];
+    c.autoMotor = code !== player;
+    autoArmies(c);
   }
+  logisticsStep();
   log(`Inizia la partita: guidi ${C(player).name}. Il mondo è in pace... per ora.`, 'good');
   return S;
 }
@@ -204,6 +194,8 @@ function tick() {
   countTiles();
   Econ.worldDaily();
   for (const k in S.countries) if (S.countries[k].alive && !S.countries[k].capitulated) economy(S.countries[k]);
+  logisticsStep();
+  for (const k in S.countries) if (S.countries[k].alive && !S.countries[k].capitulated) commandStep(S.countries[k]);
   militaryStep();
   researchTick();
   for (const k in S.countries) {
@@ -222,14 +214,15 @@ function economy(c) {
   c.pp = Math.min(999, c.pp + c.ppGain);
   c.manpower += c.tiles * 12 * (1 + c.mpBonus + Econ.manpowerMod(c));
   const isP = c.code === S.player;
-  Econ.daily(c); // produzione, risorse, commercio e cantieri (economy.js)
+  Econ.daily(c); // produzione, risorse, commercio e cantieri (economy.js, con ferrovie e hub di land/logistics.js)
   for (let i = c.training.length - 1; i >= 0; i--) {
     const tr = c.training[i];
     if (--tr.days > 0) continue;
     c.training.splice(i, 1);
     const tile = spawnTile(c);
     if (tile >= 0) {
-      const d = createDiv(c.code, tr.type, tile);
+      const d = createDiv(c.code, tr.type, tile, tr.tpl);
+      autoArmies(c);
       if (isP) log(`${divName(d)} è pronta per il combattimento.`, 'good');
     }
   }
@@ -254,18 +247,7 @@ function spawnTile(c) {
 // ---------- azioni economiche (giocatore e IA) ----------
 function canBuild(c) { return c.civ + c.mil + c.construction.length < factoryCap(c); }
 function queueBuild(c, type) { return Econ.queueBuild(c, type); }
-function canRecruit(c, type) {
-  const ut = UNIT_TYPES[type];
-  if (type === 'arm' && !c.armorTech) return false;
-  return Econ.canPay(c, type) && c.manpower >= ut.mp;
-}
-function recruit(c, type) {
-  if (!canRecruit(c, type)) return false;
-  const ut = UNIT_TYPES[type];
-  Econ.pay(c, type); c.manpower -= ut.mp;
-  c.training.push({ type, days: ut.days, total: ut.days });
-  return true;
-}
+// canRecruit e recruit: vedi land/divisions.js (modelli di divisione, pagati con Econ)
 function focusAvailable(c, f) {
   if (c.done.has(f.id) || c.focus === f.id) return false;
   if (f.req && !f.req.every(r => c.done.has(r) || (r === 'tank' && c.armorTech))) return false;
@@ -278,75 +260,13 @@ function startFocus(c, id) {
   return true;
 }
 
-// ---------- movimento e combattimento ----------
-function militaryStep() {
-  S.battles = [];
-  const combats = new Map();
-  for (const d of S.divs) d.combat = false;
-  for (const d of S.divs) {
-    if (d.dead) continue;
-    if (!d.path.length) {
-      if (!S.tiles[d.tile].land) returnToLand(d);
-      continue;
-    }
-    const nx = d.path[0], t = S.tiles[nx];
-    if (!passable(d.owner, t)) { d.path = []; d.prog = 0; continue; }
-    if (t.land && hasHostile(nx, d.owner)) {
-      if (d.org < UNIT_TYPES[d.type].org * 0.15) {
-        d.path = []; d.prog = 0;
-        if (d.owner === S.player) log(`${divName(d)} ha interrotto l'attacco: organizzazione esaurita.`, 'warn');
-        continue;
-      }
-      let a = combats.get(nx);
-      if (!a) { a = []; combats.set(nx, a); }
-      a.push(d); d.combat = true;
-      continue;
-    }
-    d.prog += t.land ? speedOf(d) / TERRAIN[t.terrain].cost : SEA_SPEED;
-    if (d.prog >= 1) {
-      d.prog = 0;
-      d.path.shift();
-      moveDiv(d, nx);
-      if (t.land) occupy(t, d.owner);
-    }
-  }
-  for (const [ti, atk] of combats) resolveCombat(ti, atk);
-  for (const d of S.divs) if (!d.dead) recover(d);
-}
-
+// ---------- movimento e combattimento: militaryStep e resolveCombat in land/combat.js ----------
 function occupy(t, owner) {
   if (t.ctrl === owner || !atWar(t.ctrl, owner)) return;
   Diplo.onOccupy(t, owner);
   // liberazione di un territorio alleato
   t.ctrl = (allied(t.owner, owner) && C(t.owner).alive) ? t.owner : owner;
   S.mapDirty = true;
-}
-
-function resolveCombat(ti, atk) {
-  const t = S.tiles[ti];
-  const a0 = atk[0].owner;
-  const defs = (S.byTile.get(ti) || []).filter(d => !d.dead && atWar(d.owner, a0));
-  if (!defs.length) return;
-  let A = 0, D = 0;
-  for (const d of atk) A += atkValue(d, ti);
-  for (const d of defs) D += defValueOf(d);
-  D *= TERRAIN[t.terrain].def;
-  A *= (0.85 + Math.random() * 0.3) * Intel.combatMod(a0, defs[0].owner);
-  D *= (0.85 + Math.random() * 0.3) * Intel.combatMod(defs[0].owner, a0);
-  Diplo.onCombat(atk, defs, A, D);
-  const perD = A * 0.5 / defs.length, perA = D * 0.35 / atk.length;
-  for (const d of defs) { d.org = Math.max(0, d.org - perD); d.str -= perD * 0.0035; d.combat = true; }
-  for (const d of atk) { const dmg = perA / divBreakMul(d); d.org = Math.max(0, d.org - dmg); d.str -= dmg * 0.0035; }
-  S.battles.push({ to: ti, from: [...new Set(atk.map(d => d.tile))] });
-  for (const d of [...defs, ...atk]) {
-    if (d.str < 0.05) {
-      destroyDiv(d);
-      if (d.owner === S.player) log(`${divName(d)} è stata annientata.`, 'bad');
-    }
-  }
-  if (defs.every(d => d.dead || d.org <= 0.5)) {
-    for (const d of defs) if (!d.dead) retreat(d);
-  }
 }
 
 function retreat(d) {
@@ -377,18 +297,6 @@ function returnToLand(d) {
   }
   if (best >= 0) d.path = buildPath(prev, d.tile, best) || [];
   else destroyDiv(d);
-}
-
-function recover(d) {
-  const ut = UNIT_TYPES[d.type], c = C(d.owner), t = S.tiles[d.tile];
-  if (d.combat || !t.land) return;
-  const rb = 1 + c.recBonus;
-  d.org = Math.min(ut.org, d.org + (d.path.length ? 1 : 3.5) * rb);
-  if (d.str < 1 && allied(t.ctrl, d.owner)) {
-    const need = Math.min(0.02 * rb, 1 - d.str);
-    const mp = need * ut.mp;
-    if (Econ.canPay(c, d.type, need) && c.manpower >= mp) { Econ.pay(c, d.type, need); c.manpower -= mp; d.str += need; }
-  }
 }
 
 // ---------- diplomazia ----------
@@ -445,7 +353,8 @@ function annex(actor, target) {
   }
   a.civ += b.civ; a.mil += b.mil;
   a.equipment += b.equipment * 0.5; a.manpower += b.manpower * 0.5;
-  for (const d of S.divs) if (d.owner === target && !d.dead) { d.owner = actor; d.num = ++a.divCounter; d.path = []; }
+  for (const d of S.divs) if (d.owner === target && !d.dead) { d.owner = actor; d.num = ++a.divCounter; d.path = []; d.tpl = (resolveTpl(a, d.type) || a.templates[0]).id; d.army = null; invalidateLand(d); }
+  autoArmies(a);
   killCountry(target);
   Diplo.onAnnex(actor);
   log(`${a.name} ha annesso ${b.name}.`, involvesPlayer(actor, target) ? 'bad' : '');

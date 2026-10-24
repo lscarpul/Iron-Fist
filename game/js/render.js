@@ -557,7 +557,7 @@ const Render = {
         ctx.fillStyle = '#fff';
         ctx.fillText(String(g.length), x + cw / 2 + 2 * lw, y + chh / 2 + 0.5 * lw);
         let org = 0;
-        for (const d of g) org += d.org / (typeof divMaxOrg === 'function' ? divMaxOrg(d) : UNIT_TYPES[d.type].org);
+        for (const d of g) org += Math.min(1, d.org / divMaxOrg(d));
         org /= g.length;
         const bh = 3 * k0 * lw;
         ctx.fillStyle = '#1a1a1a';
