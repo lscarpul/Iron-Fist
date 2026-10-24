@@ -384,7 +384,7 @@ function focusInvite(c, t) {
 }
 
 // ---------- testi degli effetti ----------
-const pct = v => `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`;
+const pctSigned = v => `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`;
 const num = v => `${v > 0 ? '+' : ''}${fmt(v)}`;
 function effectText(e) {
   const r = [];
@@ -400,9 +400,9 @@ function effectText(e) {
   if (e.equipment) r.push(`${num(e.equipment)} equipaggiamento`);
   if (e.pp) r.push(`${num(e.pp)} potere politico`);
   if (e.ppGain) r.push(`${e.ppGain > 0 ? '+' : ''}${e.ppGain} potere politico al giorno`);
-  for (const k in EFFECT_LABELS) if (e[k]) r.push(`${pct(e[k])} ${EFFECT_LABELS[k]}`);
+  for (const k in EFFECT_LABELS) if (e[k]) r.push(`${pctSigned(e[k])} ${EFFECT_LABELS[k]}`);
   if (e.armorTech) r.push('Sblocca le divisioni corazzate');
-  if (e.mods) for (const k in e.mods) r.push(`${pct(e.mods[k])} ${MOD_LABELS[k] || k}`);
+  if (e.mods) for (const k in e.mods) r.push(`${pctSigned(e.mods[k])} ${MOD_LABELS[k] || k}`);
   if (e.xp) for (const k in e.xp) r.push(`+${e.xp[k]} esperienza ${{ army: 'esercito', air: 'aviazione', navy: 'marina' }[k]}`);
   if (e.research) for (const x of e.research) r.push(`Bonus ricerca ${RESEARCH_CATS[x.cat] || x.cat}: ${Math.round(x.bonus * 100)}%${x.aot ? ' (annulla la penalità di anticipo)' : ''}${x.uses > 1 ? ` ×${x.uses}` : ''}`);
   if (e.divs) for (const t in e.divs) r.push(`+${e.divs[t]} divisioni di ${UNIT_TYPES[t].name.toLowerCase()}`);

@@ -135,7 +135,7 @@ UI.registerPanel({
 });
 
 // ============================== COSTRUZIONE ==============================
-const BUILDINGS = [
+const BASE_BUILDINGS = [
   { id: 'civ', name: 'Fabbrica civile', icon: 'factory', desc: 'Costruisce edifici e paga i beni di consumo.' },
   { id: 'mil', name: 'Fabbrica militare', icon: 'milfactory', desc: 'Produce equipaggiamento.' },
 ];
@@ -148,14 +148,14 @@ UI.registerPanel({
       <div class="stat">${icon('milfactory', 18)}<b>${p.mil}</b><small>militari</small></div>
       <div class="stat">${icon('construction', 18)}<b>${p.civ + p.mil + p.construction.length}/${factoryCap(p)}</b><small>slot edifici</small></div></div>`;
     h += `<h3>${icon('construction')} Edifici</h3>`;
-    for (const b of BUILDINGS) {
+    for (const b of BASE_BUILDINGS) {
       h += `<div class="slot"><span class="sico">${icon(b.icon, 22)}</span><span class="grow"><b>${b.name}</b><br><small class="muted">${b.desc} Costo ${BUILD_COST[b.id]}</small></span>
         <button class="primary" data-act="build" data-arg="${b.id}" ${full ? 'disabled' : ''}>${icon('plus', 14)} Costruisci</button></div>`;
     }
     h += `<h3>${icon('clock')} Cantieri<span class="r">${speed.toFixed(1)} punti/giorno sul primo</span></h3>`;
     if (!p.construction.length) h += emptyState('construction', 'Nessun cantiere aperto.');
     p.construction.forEach((j, i) => {
-      const b = BUILDINGS.find(b => b.id === j.type);
+      const b = BASE_BUILDINGS.find(b => b.id === j.type);
       const days = Math.ceil((j.cost - j.prog) / speed);
       h += `<div class="slot"><span class="sico">${icon(b ? b.icon : 'construction', 20)}</span><span class="grow">
         <div class="row"><b>${b ? b.name : j.type}</b><small>${i === 0 ? `~${days} giorni` : 'in coda'}</small></div>${bar(j.prog / j.cost)}</span>
@@ -170,7 +170,7 @@ UI.registerPanel({
 });
 
 // ============================== COMMERCIO ==============================
-const RESOURCES = [
+const BASE_RESOURCES = [
   ['steel', 'Acciaio'], ['aluminium', 'Alluminio'], ['rubber', 'Gomma'], ['tungsten', 'Tungsteno'], ['chromium', 'Cromo'], ['oil', 'Petrolio'],
 ];
 UI.registerPanel({
@@ -178,13 +178,13 @@ UI.registerPanel({
   render(p) {
     let h = `<h3>${icon('trade')} Risorse strategiche</h3>`;
     if (p.resources) {
-      h += `<table class="tbl"><tr><th>Risorsa</th><th class="n">Prod.</th><th class="n">Import</th><th class="n">Export</th><th class="n">Uso</th></tr>${RESOURCES.map(([k, n]) => {
+      h += `<table class="tbl"><tr><th>Risorsa</th><th class="n">Prod.</th><th class="n">Import</th><th class="n">Export</th><th class="n">Uso</th></tr>${BASE_RESOURCES.map(([k, n]) => {
         const r = p.resources[k] || {};
         const bal = (r.prod || 0) + (r.imp || 0) - (r.exp || 0) - (r.used || 0);
         return `<tr><td>${icon(k)} ${n}</td><td class="n">${r.prod || 0}</td><td class="n">${r.imp || 0}</td><td class="n">${r.exp || 0}</td><td class="n ${bal < 0 ? 'bad' : ''}">${r.used || 0}</td></tr>`;
       }).join('')}</table>`;
     } else {
-      h += `<div class="grid3">${RESOURCES.map(([k, n]) => `<div class="stat">${icon(k, 20)}<b>—</b><small>${n}</small></div>`).join('')}</div>
+      h += `<div class="grid3">${BASE_RESOURCES.map(([k, n]) => `<div class="stat">${icon(k, 20)}<b>—</b><small>${n}</small></div>`).join('')}</div>
         <p class="hint">Le risorse e gli scambi arrivano con il nuovo sistema economico.</p>`;
     }
     h += `<h3>${icon('log')} Legge commerciale</h3>`;

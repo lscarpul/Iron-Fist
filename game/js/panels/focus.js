@@ -212,7 +212,7 @@ const FocusUI = {
         <p>${effectText(x.eff).map(esc).join(' · ')}</p><button data-act="focusStart" data-arg="${x.id}">Avvia</button></div>`;
     }
     const mods = Object.entries(p.mods || {}).filter(([, v]) => v);
-    if (mods.length) h += `<h4>Modificatori nazionali</h4><p class="done">${mods.map(([k, v]) => `${pct(v)} ${esc(MOD_LABELS[k] || k)}`).join('<br>')}</p>`;
+    if (mods.length) h += `<h4>Modificatori nazionali</h4><p class="done">${mods.map(([k, v]) => `${pctSigned(v)} ${esc(MOD_LABELS[k] || k)}`).join('<br>')}</p>`;
     const rb = (p.researchBonuses || []).filter(b => (b.uses ?? 1) > 0);
     if (rb.length) h += `<h4>Bonus di ricerca</h4><p class="done">${rb.map(b => `${esc(RESEARCH_CATS[b.cat] || b.cat)} ${Math.round(b.bonus * 100)}%${b.aot ? ' ⏩' : ''}`).join('<br>')}</p>`;
     h += `<p class="hint">Completati ${p.done.size} di ${t.focuses.length} focus.</p>`;

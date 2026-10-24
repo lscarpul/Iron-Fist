@@ -5,7 +5,7 @@
 
 const RS = { view: 'tech', cat: 'infantry' };
 
-// pct() è in focus.js
+// pctSigned() è in focus.js
 const rsTag = (txt, cls = '') => `<span class="tag ${cls}">${txt}</span>`;
 
 function rsViewButtons() {
@@ -20,8 +20,8 @@ function rsTechCard(p, t) {
   const b = av ? findBonus(p, t) : null;
   const pen = b && b.aot ? 0 : aheadPenalty(t);
   let tags = rsTag(String(t.year), yearsAhead(t) > 0 ? 'warn' : '');
-  if (!done && pen > 0) tags += ' ' + rsTag(`anticipo ${pct(pen)}`, 'bad');
-  if (b) tags += ' ' + rsTag(`${esc(b.from || 'Bonus')} ${pct(b.bonus || 0)}${b.aot ? ', senza penalità' : ''}`, 'good');
+  if (!done && pen > 0) tags += ' ' + rsTag(`anticipo ${pctSigned(pen)}`, 'bad');
+  if (b) tags += ' ' + rsTag(`${esc(b.from || 'Bonus')} ${pctSigned(b.bonus || 0)}${b.aot ? ', senza penalità' : ''}`, 'good');
   const running = p.research.some(r => r.id === t.id);
   const part = p.partial[t.id] ? ` · ${Math.round(p.partial[t.id] * 100)}% già fatto` : '';
   const req = !done && !av && !running ? `<small>Richiede: ${[...(t.req || []).map(r => esc(TECH_BY_ID[r].name)),
@@ -41,12 +41,12 @@ function rsPanelTech(p) {
     const pen = aheadPenalty(t, job);
     h += `<div class="card cur slot"><div class="row"><b>${esc(t.name)}</b><button class="x" data-act="rs_cancel" data-arg="${i}" title="Interrompi (il progresso resta)">✕</button></div>
       ${bar(job.frac)}<div class="row"><small>${daysLeft(p, job)} giorni rimanenti</small><small>${esc(CAT_NAME[t.cat])} · ${t.year}</small></div>
-      <p>${pen > 0 ? rsTag(`penalità d'anticipo ${pct(pen)}`, 'bad') : ''}${job.from ? ' ' + rsTag(`${esc(job.from)} ${pct(job.bonus)}${job.aot ? ', senza penalità' : ''}`, 'good') : ''}</p></div>`;
+      <p>${pen > 0 ? rsTag(`penalità d'anticipo ${pctSigned(pen)}`, 'bad') : ''}${job.from ? ' ' + rsTag(`${esc(job.from)} ${pctSigned(job.bonus)}${job.aot ? ', senza penalità' : ''}`, 'good') : ''}</p></div>`;
   }
-  h += `<p class="hint">Velocità di ricerca ${pct(researchSpeedOf(p))}. Ricercare prima dell'anno storico costa +200% di tempo per ogni anno di anticipo: i bonus d'anticipo dei focus e dello spionaggio la annullano per una ricerca.</p>`;
+  h += `<p class="hint">Velocità di ricerca ${pctSigned(researchSpeedOf(p))}. Ricercare prima dell'anno storico costa +200% di tempo per ogni anno di anticipo: i bonus d'anticipo dei focus e dello spionaggio la annullano per una ricerca.</p>`;
   if (p.researchBonuses.length) {
     h += `<h4>Bonus di ricerca disponibili</h4>` + p.researchBonuses.map(b =>
-      `<p>${rsTag(`${esc(b.from || 'Bonus')}: ${pct(b.bonus || 0)} ${esc(CAT_NAME[b.cat] || b.cat)}${b.aot ? ', annulla penalità' : ''}${(b.uses ?? 1) > 1 ? ` (${b.uses} usi)` : ''}`, 'good')}</p>`).join('');
+      `<p>${rsTag(`${esc(b.from || 'Bonus')}: ${pctSigned(b.bonus || 0)} ${esc(CAT_NAME[b.cat] || b.cat)}${b.aot ? ', annulla penalità' : ''}${(b.uses ?? 1) > 1 ? ` (${b.uses} usi)` : ''}`, 'good')}</p>`).join('');
   }
   h += `<div class="rs-cats">${Object.keys(TECH_CATS).map(k => {
     const n = TECHS.filter(t => t.cat === k && techAvailable(p, t)).length;
