@@ -405,7 +405,9 @@ function logisticsStep() {
   for (const code in S.countries) {
     const c = S.countries[code];
     if (!c.alive) continue;
-    computeSupply(code);
+    // in pace i rifornimenti cambiano poco: ricalcolo settimanale (sfalsato), in guerra ogni giorno
+    const atWarNow = enemiesOf(code).length > 0;
+    if (atWarNow || code === S.player || !c.landSup || (S.day + code.charCodeAt(0)) % 7 === 0) computeSupply(code);
   }
   // la modalità mappa dei rifornimenti/meteo va ridisegnata quando cambiano i dati
   if (typeof Render !== 'undefined' && (Render.mapMode === 'supply' || Render.mapMode === 'weather') && LandRender.provinceMap()) S.mapDirty = true;
