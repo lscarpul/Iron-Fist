@@ -10,7 +10,8 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 640,
     title: 'Iron Fist',
-    backgroundColor: '#11151a',
+    icon: path.join(__dirname, '..', 'game', 'img', 'icon.png'),
+    backgroundColor: '#0d0f0e',
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
