@@ -116,12 +116,14 @@ const UI = {
     const t = S.tiles[ti];
     if (!t.land) {
       const n = (S.byTile.get(ti) || []).length;
-      return `<b>Mare</b>${n ? `<br>${n} divisioni in trasporto` : ''}`;
+      return `<b>${esc(MAP.regions[t.region].name)}</b>${n ? `<br>${n} divisioni in trasporto` : ''}`;
     }
     const o = C(t.owner), c = C(t.ctrl);
-    let h = `<b>${flag(o)} ${esc(o.name)}</b>`;
+    const st = MAP.states[t.state];
+    let h = `<b>${t.city ? esc(t.city) + ', ' : ''}${esc(st.name)}</b><br>${flag(o)} ${esc(o.name)}`;
     if (t.ctrl !== t.owner) h += `<br><span class="warn">Occupato da ${esc(c.name)}</span>`;
-    h += `<br>${TERRAIN[t.terrain].name}${t.vp >= 20 ? ' · Capitale' : t.vp ? ' · Città' : ''}`;
+    h += `<br>${TERRAIN[t.terrain].name}${o.capital === t.i ? ' · Capitale' : ''}${t.vp ? ` · ${t.vp} punti vittoria` : ''}`;
+    h += `<br>Infrastrutture ${t.infra}/5${t.rail ? ` · ferrovia liv. ${t.rail}` : ''}${t.port ? ` · porto ${t.port}` : ''}`;
     h += ` · difesa ×${TERRAIN[t.terrain].def}`;
     const divs = (S.byTile.get(ti) || []).filter(d => !d.dead);
     const by = {};
@@ -281,7 +283,7 @@ const UI = {
       const f = S.factions[id];
       h += `<div class="card"><b>${esc(f.name)}</b><p>${f.members.map(m => `${flag(C(m))} ${esc(C(m).name)}`).join('<br>')}</p></div>`;
     }
-    const wars = [...S.wars].map(k => `${esc(C(k[0]).name)} ⚔ ${esc(C(k[1]).name)}`);
+    const wars = [...S.wars].map(k => k.split('|')).map(([a, b]) => `${esc(C(a).name)} ⚔ ${esc(C(b).name)}`);
     h += `<h3>Guerre in corso</h3><p class="done">${wars.length ? wars.join('<br>') : 'Nessuna'}</p>`;
     return h;
   },

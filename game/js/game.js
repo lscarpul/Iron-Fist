@@ -21,7 +21,8 @@ function allied(a, b) {
   const fa = C(a).faction;
   return !!fa && fa === C(b).faction;
 }
-const warKey = (a, b) => a < b ? a + b : b + a;
+// i codici possono avere più lettere (tag HOI4): il separatore evita ambiguità
+const warKey = (a, b) => a < b ? a + '|' + b : b + '|' + a;
 function atWar(a, b) { return !!a && !!b && a !== b && S.wars.has(warKey(a, b)); }
 function enemiesOf(code) {
   const r = [];
@@ -451,7 +452,7 @@ function killCountry(code) {
   c.alive = false;
   c.construction = []; c.training = []; c.focus = null;
   if (c.faction) leaveFaction(code);
-  for (const k of [...S.wars]) if (k.includes(code)) S.wars.delete(k);
+  for (const k of [...S.wars]) if (k.split('|').includes(code)) S.wars.delete(k);
   S.guarantees = S.guarantees.filter(g => g.by !== code && g.to !== code);
   S.mapDirty = true;
 }

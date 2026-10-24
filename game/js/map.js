@@ -1,120 +1,86 @@
 'use strict';
 
-// Griglia esagonale "pointy-top" con righe dispari sfalsate (odd-r).
-const HEX = 8, SQ3 = Math.sqrt(3), MAP_PAD = 14, MAP_SCALE = 2;
+// Mappa a province reali (Europa e Mediterraneo, 1936), come in Hearts of Iron IV.
+// I dati vengono da js/map-data.js (MAP_DATA), generato da tools/mapgen/build_map.py.
+// Il modello dati (province, stati, regioni strategiche, adiacenze, ferrovie...) è
+// documentato in docs/MAPPA.md.
+//
+// Ogni provincia diventa una "tile" del gioco (S.tiles[i], con i = id della provincia),
+// quindi tutto il codice che lavora sulle tile (movimento, combattimento, IA) funziona
+// sulle province senza cambiamenti.
 
-function hexCenter(x, y) {
-  return [MAP_PAD + HEX * SQ3 * (x + 0.5 * (y & 1)) + HEX * SQ3 / 2, MAP_PAD + HEX + HEX * 1.5 * y];
+const MAP = {
+  data: null,
+  states: [],     // MAP_DATA.states (statici: nome, proprietario 1936, province, risorse...)
+  regions: [],    // regioni strategiche (terrestri e marittime)
+  edges: new Map(), // chiave edgeKey(a, b) -> { len (km), river, strait, rail (0-5) }
+  arcs: null,     // archi dei confini decodificati: Float32Array [x0, y0, x1, y1, ...]
+  arcSides: null, // per ogni arco le due province ai lati (-1 = nessuna: lago o bordo mappa)
+};
+
+const edgeKey = (a, b) => a < b ? a * 65536 + b : b * 65536 + a;
+function mapEdge(a, b) { return MAP.edges.get(edgeKey(a, b)) || null; }
+// distanza in km tra i centri di due province
+function provDistKm(a, b) {
+  const p = MAP.data.provinces[a], q = MAP.data.provinces[b];
+  const r = Math.PI / 180, dLat = (q.lat - p.lat) * r, dLon = (q.lon - p.lon) * r;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(p.lat * r) * Math.cos(q.lat * r) * Math.sin(dLon / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h)); // distanza sul globo
 }
 
-function hexNeighbors(x, y, W, H) {
-  const d = (y & 1)
-    ? [[1, 0], [-1, 0], [0, -1], [1, -1], [0, 1], [1, 1]]
-    : [[1, 0], [-1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]];
-  const r = [];
-  for (const [dx, dy] of d) {
-    const nx = x + dx, ny = y + dy;
-    if (nx >= 0 && ny >= 0 && nx < W && ny < H) r.push(ny * W + nx);
-  }
-  return r;
+function decodeArcs(D) {
+  const q = D.quant;
+  return D.arcs.map(a => {
+    const n = a.length / 2, out = new Float32Array(a.length);
+    let x = a[0], y = a[1];
+    out[0] = x * q; out[1] = y * q;
+    for (let k = 1; k < n; k++) {
+      x += a[2 * k]; y += a[2 * k + 1];
+      out[2 * k] = x * q; out[2 * k + 1] = y * q;
+    }
+    return out;
+  });
 }
 
-function buildMap(seed) {
-  const rng = mulberry32(seed);
-  const W0 = Math.max(...MAP_ASCII.map(r => r.length)), H0 = MAP_ASCII.length;
-  const rows = MAP_ASCII.map(r => r.padEnd(W0, '.'));
-  const W = W0 * MAP_SCALE, H = H0 * MAP_SCALE;
-  const at = (ax, ay) => (ax < 0 || ay < 0 || ax >= W0 || ay >= H0) ? '.' : rows[ay][ax];
-
-  // terreno deciso per regione ASCII, poi ereditato (con un po' di rumore) dagli esagoni
-  const coarseTerrain = [];
-  for (let ay = 0; ay < H0; ay++) {
-    coarseTerrain.push([]);
-    for (let ax = 0; ax < W0; ax++) {
-      const ch = at(ax, ay);
-      let ter = 'plains';
-      let mp = 0;
-      for (const [x0, y0, x1, y1, p] of MOUNTAIN_ZONES)
-        if (ax >= x0 && ax <= x1 && ay >= y0 && ay <= y1) mp = Math.max(mp, p);
-      const r = rng();
-      if (r < mp) ter = 'mountain';
-      else if (r < mp + (FOREST_RICH.has(ch) ? 0.32 : 0.15)) ter = 'forest';
-      else if (r < mp + 0.45) ter = rng() < 0.4 ? 'hills' : 'plains';
-      coarseTerrain[ay].push(ter);
+function buildMap() {
+  const D = MAP_DATA;
+  if (!MAP.data) {
+    MAP.data = D;
+    MAP.states = D.states;
+    MAP.regions = D.regions;
+    MAP.arcs = decodeArcs(D);
+    MAP.arcSides = D.arcSides;
+    for (const [a, b, len, flag] of D.adjacency) {
+      MAP.edges.set(edgeKey(a, b), { len, river: flag === 1, strait: flag === 2, rail: 0 });
+    }
+    for (const [a, b, lvl] of D.railways) {
+      const e = mapEdge(a, b);
+      if (e) e.rail = lvl;
     }
   }
 
-  const tiles = [];
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const ax = Math.floor(x / MAP_SCALE), ay = Math.floor(y / MAP_SCALE);
-      let ch = at(ax, ay);
-      if (rng() < 0.25) { // bordi irregolari
-        const dx = (x % MAP_SCALE === 0) ? -1 : 1, dy = (y % MAP_SCALE === 0) ? -1 : 1;
-        const r = rng();
-        ch = r < 0.4 ? at(ax + dx, ay) : r < 0.8 ? at(ax, ay + dy) : at(ax + dx, ay + dy);
-      }
-      let terrain = coarseTerrain[ay][ax];
-      if (rng() < 0.2) terrain = ['plains', 'forest', 'hills'][Math.floor(rng() * 3)];
-      const [cx, cy] = hexCenter(x, y);
-      tiles.push({
-        i: tiles.length, x, y, cx, cy,
-        land: ch !== '.', owner: ch === '.' ? null : ch, ctrl: ch === '.' ? null : ch,
-        terrain, vp: 0, nb: hexNeighbors(x, y, W, H), coastal: false, nearLand: false,
-      });
-    }
+  const tiles = D.provinces.map(p => {
+    const land = p.type === 'land';
+    const st = land ? D.states[p.state] : null;
+    let owner = st ? st.owner : null;
+    if (owner && !COUNTRY_DEFS[owner]) owner = null; // paese non giocabile: non dovrebbe succedere
+    return {
+      i: p.id, land: land && !!owner, owner, ctrl: owner,
+      terrain: land ? p.terrain : 'plains', vp: p.vp || 0, nb: [],
+      coastal: !!p.coastal, nearLand: false,
+      cx: p.x, cy: p.y, x: p.x, y: p.y,
+      state: land ? p.state : -1, region: p.region, area: p.area,
+      city: p.city || null, port: p.port || 0, rail: p.rail || 0, hub: !!p.hub,
+      infra: st ? st.infra : 0, elev: p.elev || 0, lon: p.lon, lat: p.lat,
+    };
+  });
+  for (const [a, b] of D.adjacency) {
+    tiles[a].nb.push(b);
+    tiles[b].nb.push(a);
   }
+  for (const t of tiles) if (!t.land) t.nearLand = t.nb.some(n => tiles[n].land);
 
-  // pulizia: esagoni isolati e laghetti di un solo esagono
-  for (let pass = 0; pass < 2; pass++) {
-    for (const t of tiles) {
-      const counts = {};
-      let same = 0, landN = 0;
-      for (const n of t.nb) {
-        const o = tiles[n].owner;
-        if (o === t.owner) same++;
-        if (o) { landN++; counts[o] = (counts[o] || 0) + 1; }
-      }
-      const major = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-      if (t.land && same === 0 && major) { t.owner = t.ctrl = major[0]; }
-      else if (!t.land && landN === t.nb.length && major) { t.land = true; t.owner = t.ctrl = major[0]; }
-      else if (t.land && landN === 0) { t.land = false; t.owner = t.ctrl = null; }
-    }
-  }
-
-  for (const t of tiles) {
-    for (const n of t.nb) {
-      if (t.land && !tiles[n].land) t.coastal = true;
-      if (!t.land && tiles[n].land) t.nearLand = true;
-    }
-    if (!t.land) t.terrain = 'plains';
-  }
-
-  // capitali e città (punti vittoria)
   const capitals = {};
-  for (const code in COUNTRY_DEFS) {
-    const def = COUNTRY_DEFS[code];
-    const fx = def.cap[0] * MAP_SCALE + 0.5, fy = def.cap[1] * MAP_SCALE + 0.5;
-    let best = -1, bd = Infinity;
-    const own = [];
-    for (const t of tiles) {
-      if (t.owner !== code) continue;
-      own.push(t);
-      const d = (t.x - fx) ** 2 + (t.y - fy) ** 2;
-      if (d < bd) { bd = d; best = t.i; }
-    }
-    if (best < 0) continue;
-    tiles[best].vp = 20;
-    tiles[best].terrain = 'plains';
-    capitals[code] = best;
-    const nCities = Math.min(4, Math.floor(own.length / 60));
-    const placed = [tiles[best]];
-    for (let k = 0, tries = 0; k < nCities && tries < 200; tries++) {
-      const t = own[Math.floor(rng() * own.length)];
-      if (placed.every(p => Math.abs(p.x - t.x) + Math.abs(p.y - t.y) > 7)) {
-        t.vp = 5; placed.push(t); k++;
-      }
-    }
-  }
-  return { tiles, W, H, capitals };
+  for (const code in D.countries) if (COUNTRY_DEFS[code]) capitals[code] = D.countries[code].capital;
+  return { tiles, W: D.width, H: D.height, capitals };
 }

@@ -1,6 +1,6 @@
 # Iron Fist
 
-Gioco di strategia "grand strategy" ispirato a Hearts of Iron IV. Europa, 1936–1946.
+Gioco di strategia "grand strategy" ispirato a Hearts of Iron IV. Il mondo intero, 1936–1946.
 È un'app desktop (Electron): si installa e si gioca senza browser e senza connessione.
 
 ## Giocare
@@ -26,7 +26,7 @@ Per pubblicare una versione: aggiorna `version` in `package.json`, poi crea e in
 
 ## Cosa c'è
 
-- **Mappa esagonale d'Europa** con 23 nazioni, terreni (pianura, foresta, colline, montagna), capitali e città.
+- **Mappa a province reali come in HOI4**: il mondo intero con i confini del 1936, 13503 province, 1542 stati, 384 regioni strategiche, 82 nazioni con tag HOI4 (colonie comprese, Cina divisa tra i signori della guerra), terreno reale (montagna, colline, foresta, palude, deserto, urbano, pianura), fiumi, ferrovie, porti, risorse e punti vittoria. Modalità mappa: politica, terreno, stati, regioni, infrastrutture, ferrovie, risorse. Dettagli in [docs/MAPPA.md](docs/MAPPA.md).
 - **Tempo reale con pausa** (Spazio, velocità 1–5), dal 1° gennaio 1936.
 - **Economia**: fabbriche civili (costruiscono) e militari (producono equipaggiamento), manodopera, potere politico.
 - **Focus nazionali**: industria, riarmo, dottrine, corazzati, mobilitazione…
@@ -42,7 +42,8 @@ Per pubblicare una versione: aggiorna `version` in `package.json`, poi crea e in
 |---|---|
 | `electron/main.js` | finestra dell'app desktop |
 | `game/index.html` | interfaccia del gioco |
-| `game/js/data.js` | mappa ASCII, nazioni, unità, focus, eventi storici |
+| `game/js/data.js` | nazioni europee, unità, focus, eventi storici |
+| `game/js/countries-world.js` | nazioni del resto del mondo ed eventi (Etiopia, Cina, Pearl Harbor...) |
 | `game/js/map.js` | generazione della griglia esagonale e del terreno |
 | `game/js/game.js` | stato, ciclo giornaliero, economia, combattimento, diplomazia |
 | `game/js/ai.js` | intelligenza artificiale delle nazioni |
