@@ -26,7 +26,7 @@ Per pubblicare una versione: aggiorna `version` in `package.json`, poi crea e in
 
 ## Cosa c'è
 
-- **Mappa esagonale d'Europa** con 23 nazioni, terreni (pianura, foresta, colline, montagna), capitali e città.
+- **Mappa a province reali come in HOI4**: Europa e Mediterraneo con i confini del 1936, 3285 province, 426 stati, regioni strategiche, 34 nazioni (colonie comprese), terreno reale (montagna, colline, foresta, palude, deserto, urbano, pianura), fiumi, ferrovie, porti, risorse e punti vittoria. Modalità mappa: politica, terreno, stati, regioni, infrastrutture, ferrovie, risorse. Dettagli in [docs/MAPPA.md](docs/MAPPA.md).
 - **Tempo reale con pausa** (Spazio, velocità 1–5), dal 1° gennaio 1936.
 - **Economia**: fabbriche civili (costruiscono) e militari (producono equipaggiamento), manodopera, potere politico.
 - **Focus nazionali**: industria, riarmo, dottrine, corazzati, mobilitazione…
