@@ -1,0 +1,36 @@
+/* aviazione e marina */
+#an-overlay { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 3; }
+#an-pickhint {
+  position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 4; pointer-events: none;
+  background: rgba(30,26,10,.92); border: 1px solid #d9b45a; color: #ffe9a8; padding: 6px 12px; border-radius: 3px; font-size: 13px;
+}
+.an-pick { background: #2e2c22; border: 1px solid #ffe14d; padding: 6px 8px; margin: 8px 0; border-radius: 3px; font-size: 12px; }
+.an-hint { color: #9a978c; font-size: 12px; }
+.an-muted { color: #9a978c; }
+.an-tag { display: inline-block; font-size: 10px; padding: 0 5px; border-radius: 2px; border: 1px solid #4b525d; color: #cfcab8; }
+.an-tag.bad { color: #ff8a7a; border-color: #7a2a22; }
+.an-tag.warn { color: #e2c044; border-color: #6a5a22; }
+.an-group { border-left: 2px solid #3a414b; padding-left: 8px; margin: 8px 0; }
+.an-btns { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; font-size: 11px; color: #9a978c; }
+button.an-sm { padding: 1px 7px; font-size: 11px; margin: 0; }
+.an-num { min-width: 18px; text-align: center; color: #e4e1d6; }
+.an-design small { color: #9a978c; font-size: 11px; }
+.qrow.an-design { grid-template-columns: 1fr 0 auto; }
+#an-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 45; padding: 16px; }
+#an-modal {
+  width: min(760px, 100%); max-height: 90vh; overflow: auto; background: linear-gradient(#2a2e35, #1d2025);
+  border: 1px solid #d9b45a; border-radius: 4px; padding: 14px 18px; box-shadow: 0 20px 60px rgba(0,0,0,.6);
+}
+.an-mhead { display: flex; justify-content: space-between; align-items: center; }
+.an-mhead h2 { font: 600 22px Oswald, sans-serif; letter-spacing: .05em; color: #d9b45a; margin: 0 0 8px; text-transform: uppercase; }
+.an-x { padding: 2px 8px; }
+.an-choice { display: block; width: 100%; text-align: left; margin: 5px 0; padding: 7px 10px; }
+.an-choice small { display: block; color: #9a978c; font-size: 12px; }
+.an-designer { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.an-designer label { display: block; font-size: 12px; color: #9a978c; margin: 6px 0; }
+.an-designer select, .an-designer input { display: block; width: 100%; margin-top: 2px; font: inherit; color: #e4e1d6; background: #15181c; border: 1px solid #4b525d; border-radius: 3px; padding: 4px 6px; }
+.an-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.an-tbl th { text-align: left; color: #9a978c; font-weight: 400; border-bottom: 1px solid #3a414b; }
+.an-tbl td { padding: 2px 4px; border-bottom: 1px solid #23272d; }
+.an-mbtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+@media (max-width: 760px) { .an-designer { grid-template-columns: 1fr; } }
