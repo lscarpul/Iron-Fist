@@ -304,7 +304,7 @@ const Econ = {
   bombingResist(c) { return c.industry === 'dispersa' ? 0.1 * this.industryLevel(c) : 0; },
   researchMod(c) { return TRADE_LAWS[c.tradeLaw].research; },
   constructionMod(c, type) {
-    let m = TRADE_LAWS[c.tradeLaw].build + ecoMod(c, 'construction_speed');
+    let m = TRADE_LAWS[c.tradeLaw].build + ecoMod(c, 'construction_speed') + (c.constructionBonus || 0);
     if (type === 'mil') m += ECON_LAWS[c.econLaw].milBuild;
     return m;
   },
