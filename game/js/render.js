@@ -277,7 +277,7 @@ const Render = {
         ctx.fillText(String(g.length), x + cw / 2 + 1, y + chh / 2 + 0.3);
         // barra organizzazione
         let org = 0;
-        for (const d of g) org += d.org / UNIT_TYPES[d.type].org;
+        for (const d of g) org += Math.min(1, d.org / divMaxOrg(d));
         org /= g.length;
         ctx.fillStyle = '#1a1a1a';
         ctx.fillRect(x, y + chh, cw, 1.6);
