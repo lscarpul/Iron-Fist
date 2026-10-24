@@ -34,10 +34,14 @@ Per pubblicare una versione: aggiorna `version` in `package.json`, poi crea e in
 - **Dottrine terrestri**: Guerra di movimento, Potenza di fuoco superiore, Grande piano di battaglia, Assalto di massa, sbloccate con l'esperienza dell'esercito; trinceramento e pianificazione per le divisioni ferme.
 - **Nucleare**: Ricerca atomica, reattore, bomba atomica (1945), Progetto Manhattan.
 - **Esercito**: fanteria e corazzate, organizzazione e forza, rinforzi, ritirate, accerchiamenti, sbarchi dal mare.
-- **Diplomazia**: dichiarazioni di guerra, garanzie, fazioni (Alleati, Asse, Comintern o la tua).
+- **Diplomazia** stile HOI4: tensione mondiale con soglie per ideologia, opinione tra paesi, obiettivi di guerra da giustificare, garanzie, fazioni, patti di non aggressione, pretese stile Monaco, lend-lease, pace bianca.
+- **Conferenze di pace**: chi ha combattuto di più ha più punti partecipazione e sceglie per primo regioni o stati fantoccio.
+- **Sudditi**: fantocci con autonomia che cresce col tempo, estrazione di equipaggiamento, annessione o indipendenza.
+- **Intelligence**: agenzia con agenti, reti nei paesi stranieri, controspionaggio e operazioni (sabotaggio, furto di progetti, propaganda, resistenza, decrittazione, colpo di stato, governo collaborazionista).
+- **Occupazione**: guarnigioni, resistenza e conformità per territorio, leggi di occupazione, sabotaggi e insurrezioni, governi collaborazionisti.
 - **Eventi storici**: Anschluss, Monaco, Polonia 1939, Weserübung, Barbarossa…
 - **IA** che costruisce, recluta, presidia il fronte, attacca quando è in vantaggio e tenta sbarchi.
-- **Capitolazione** quando un paese perde gran parte del territorio.
+- **Capitolazione** quando un paese perde gran parte del territorio: il governo resta in esilio finché i suoi alleati combattono, poi si tiene la conferenza di pace.
 
 ## Struttura
 
@@ -52,6 +56,12 @@ Per pubblicare una versione: aggiorna `version` in `package.json`, poi crea e in
 | `game/js/ai.js` | intelligenza artificiale delle nazioni |
 | `game/js/research.js` | tecnologie, dottrine terrestri, armi nucleari (logica e IA) |
 | `game/js/panels/ricerca.js` | scheda Ricerca (tecnologie, dottrine, nucleare) |
+| `game/js/diplomacy.js` | tensione mondiale, opinione, obiettivi di guerra, patti, lend-lease, sudditi, conferenze di pace |
+| `game/js/intel.js` | agenzie di intelligence, reti, operazioni di spionaggio |
+| `game/js/occupation.js` | territori occupati: guarnigioni, resistenza, conformità, leggi di occupazione |
+| `game/js/diplo-api.js` | azioni e riepilogo testuale per l'IA testuale (registro `GameActions`) |
+| `game/js/panels/` | pannelli Diplomazia, Intelligence e Occupazione |
+| `tests/sim.js` | simulazione headless: `node tests/sim.js G 3650` gioca 10 anni con la Germania |
 | `game/js/render.js` | disegno della mappa su canvas |
 | `game/js/ui.js` | pannelli, input mouse/tastiera, finestre |
 | `game/js/main.js` | schermata iniziale e loop principale |
