@@ -316,7 +316,9 @@ function actionLabel(name, input) {
     case 'start_national_focus': return `Focus nazionale: ${FOCUS_BY_ID[input.focus_id]?.name || input.focus_id}`;
     default: {
       const t = name.replace(/_/g, ' ');
-      const c = input && input.country ? `: ${cn()}` : '';
+      const who = input && (input.country || input.paese || input.target);
+      let c = '';
+      if (who) { try { c = `: ${C(findCountry(who)).name}`; } catch (e) { c = `: ${who}`; } }
       return t.charAt(0).toUpperCase() + t.slice(1) + c;
     }
   }
