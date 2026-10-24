@@ -647,8 +647,9 @@ const Peace = {
     const out = [];
     const ind = (L.civ + L.mil) / own.length;
     for (const [k, ts] of groups) {
-      let name;
-      if (typeof k === 'number' && k >= 0 && ts[0].stateName) name = ts[0].stateName;
+      let name, isState = false;
+      const stName = typeof k === 'number' && k >= 0 ? ts[0].stateName || (typeof MAP !== 'undefined' && MAP.states[k] ? MAP.states[k].name : null) : null;
+      if (stName) { name = stName; isState = true; }
       else if (ts.some(t => t.i === L.capital)) name = 'Capitale';
       else if (k === 'isole') name = 'Isole';
       else {
@@ -659,7 +660,7 @@ const Peace = {
       used[name] = (used[name] || 0) + 1;
       if (used[name] > 1) name += ' ' + used[name];
       const vp = ts.reduce((s, t) => s + t.vp, 0);
-      out.push({ id: out.length, name: `${L.name} ${name}`, tiles: ts.map(t => t.i), vp, cost: Math.max(5, Math.round(ts.length * 1.2 + vp + ind * ts.length * 4)) });
+      out.push({ id: out.length, name: isState ? name : `${L.name} ${name}`, tiles: ts.map(t => t.i), vp, cost: Math.max(5, Math.round(ts.length * 1.2 + vp + ind * ts.length * 4)) });
     }
     return out;
   },
