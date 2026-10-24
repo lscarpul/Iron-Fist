@@ -12,7 +12,7 @@ function landPanelLogistica(p) {
     <div class="lchips"><button data-act="mapMode" data-arg="supply" class="${LandUI.mapMode === 'supply' ? 'on' : ''}">🗺️ Mappa rifornimenti</button>
       <button data-act="mapMode" data-arg="weather" class="${LandUI.mapMode === 'weather' ? 'on' : ''}">☁️ Mappa meteo</button>
       <button data-act="mapMode" data-arg="" class="${!LandUI.mapMode ? 'on' : ''}">Politica</button></div>
-    <p class="hint">I rifornimenti nascono nella capitale, viaggiano in treno fino agli hub e da lì a cavallo (2-3 esagoni) o in camion (4-5). Fango, neve e infrastrutture scarse accorciano il raggio.</p>`;
+    <p class="hint">I rifornimenti nascono nella capitale, viaggiano in treno fino agli hub e da lì a cavallo (2-3 province) o in camion (4-5). Fango, neve e infrastrutture scarse accorciano il raggio.</p>`;
   // camion
   const tr = Math.floor(trucksOf(p));
   h += `<h4>Camion</h4><div class="row"><span>Disponibili <b>${fmt(tr)}</b></span><span>In uso ${fmt(info.trucksUsed)} / richiesti ${fmt(info.trucksNeed)}</span></div>
@@ -23,7 +23,7 @@ function landPanelLogistica(p) {
   const ti = LandUI.selTile;
   if (ti >= 0) {
     const t = S.tiles[ti], hb = hubAt(ti), w = weatherOf(ti);
-    h += `<h4>Esagono selezionato</h4><div class="card cur">
+    h += `<h4>Provincia selezionata</h4><div class="card cur">
       <p>${t.land ? `${flag(C(t.owner))} ${esc(C(t.owner).name)} · ${TERRAIN[t.terrain]?.name || t.terrain}` : 'Mare'} · ${w.icon} ${w.name}</p>
       <p>Ferrovia liv. <b>${S.rail[ti]}</b> (${RAIL_CAP[S.rail[ti]]}/g) · Infrastrutture <b>${S.infra[ti]}</b>/5 ${hb ? '· <b>Hub</b>' : ''}</p>
       <p>Flusso di rifornimenti: ${pct(S.supplyFlow[ti] || 0)}</p>
@@ -33,7 +33,7 @@ function landPanelLogistica(p) {
         return `<button data-act="landBuild" data-arg="${k}" ${err ? `disabled title="${esc(err)}"` : ''}>${name}</button>`;
       }).join(' ')}
       </div>`;
-  } else h += `<p class="hint">Clicca un esagono sulla mappa (con questa scheda aperta) per vedere ferrovie e infrastrutture e costruire.</p>`;
+  } else h += `<p class="hint">Clicca una provincia sulla mappa (con questa scheda aperta) per vedere ferrovie e infrastrutture e costruire.</p>`;
   const jobs = p.construction.filter(j => j.tile != null);
   if (jobs.length) {
     h += `<h4>Cantieri logistici</h4>`;

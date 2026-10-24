@@ -404,7 +404,7 @@ function logisticsStep() {
 // ---------- costruzione di ferrovie, hub e infrastrutture ----------
 function landBuildCheck(c, type, ti) {
   const t = S.tiles[ti];
-  if (!t || !t.land) return 'Seleziona un esagono di terra';
+  if (!t || !t.land) return 'Seleziona una provincia di terra';
   if (t.owner !== c.code || t.ctrl !== c.code) return 'Puoi costruire solo nel tuo territorio controllato';
   if (c.construction.some(j => j.tile === ti && j.type === type)) return 'Già in costruzione';
   if (type === 'rail') {
