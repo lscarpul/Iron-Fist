@@ -121,7 +121,7 @@ defTree('CHI', 'Repubblica di Cina', [
   F('CHI_chongqing', 'Le industrie di Chongqing', 9, { pre: ['CHI_german'], eff: { civ: 3, slots: 3, mods: { efficiency_retention: 0.1 } }, ai: 8, ic: '🏭' }),
   F('CHI_arsenal', 'Arsenale di Hanyang', 9, { pre: ['CHI_chongqing'], eff: { mil: 3 }, ai: 8, ic: '⚙️' }),
   F('CHI_mass', 'Assalto di massa', 7, { pre: ['CHI_central'], eff: { research: [R('doctrine', 1)], mpBonus: 0.2 }, ai: 7 }),
-  F('CHI_hump', "Il ponte aereo dell'Himalaya", 8, { pre: ['CHI_mass', 'CHI_arsenal'], cond: { year: 1942 }, eff: { equipment: 15000, research: [R('air')] }, ai: 7, ic: '✈️' }),
+  F('CHI_hump', "Il ponte aereo dell'Himalaya", 8, { pre: ['CHI_mass', 'CHI_arsenal'], cond: { year: 1942 }, eff: { equipment: 15000, research: [R('air')] }, ai: 7, ic: '✈️' }),  branchIndustry(11), branchArmy(14), branchAir(17),
 ]);
 
 // ---------- CINA COMUNISTA ----------
@@ -135,7 +135,7 @@ defTree('PRC', 'Partito Comunista Cinese', [
   F('PRC_rectify', 'Campagna di rettificazione', 1, { pre: ['PRC_100reg'], eff: { ppGain: 0.5, mods: { stability: 0.1 } }, ai: 8 }),
   F('PRC_soviet', 'Il sostegno sovietico', 3, { pre: ['PRC_8route'], y: 3, cond: { alive: 'S' }, eff: { joinFaction: 'S', equipment: 5000 }, ai: 6 }),
   F('PRC_final', 'La guerra di liberazione', 2, { pre: [['PRC_rectify', 'PRC_soviet']], y: 5, cond: { year: 1945, alive: 'CHI' }, eff: { war: 'CHI', atkBonus: 0.1 }, ai: 9 }),
-  F('PRC_land', 'Riforma agraria', 4, { pre: ['PRC_civil'], eff: { manpower: 200000, mods: { stability: 0.05 } }, ai: 0, ic: '🌾' }),
+  F('PRC_land', 'Riforma agraria', 4, { pre: ['PRC_civil'], eff: { manpower: 200000, mods: { stability: 0.05 } }, ai: 0, ic: '🌾' }),  branchIndustry(6), branchArmy(9),
 ]);
 
 // ---------- MANCIUKUÒ e MENGJIANG ----------
