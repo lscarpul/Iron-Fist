@@ -361,6 +361,12 @@ function focusInvite(c, t) {
       [{ label: 'Entra', fn: () => joinFaction(t, c.faction) }, { label: 'Rifiuta' }]);
     return;
   }
+  // un paese neutrale non entra in una fazione in guerra, a meno di combattere già lo stesso nemico
+  const facEnemies = membersOf(c.code).flatMap(m => enemiesOf(m));
+  if (facEnemies.length && !facEnemies.some(e => atWar(e, t))) {
+    log(`${tg.name} resta fuori dalla guerra e declina l'invito di ${c.name}.`, involvesPlayer(c.code) ? 'warn' : '');
+    return;
+  }
   const same = tg.ideology === c.ideology;
   if (same || (tg.ideology === 'neutral' && Math.random() < 0.5)) joinFaction(t, c.faction);
   else log(`${tg.name} declina l'invito di ${c.name}.`, involvesPlayer(c.code) ? 'warn' : '');
