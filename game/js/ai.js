@@ -7,18 +7,15 @@ function aiThink(c) {
     const id = order.find(id => focusAvailable(c, FOCUS_BY_ID[id]));
     if (id) startFocus(c, id);
   }
-  // costruzione
-  if (!c.construction.length && canBuild(c)) {
-    const tense = enemiesOf(c.code).length > 0 || S.day > 730;
-    queueBuild(c, Math.random() < (tense ? 0.75 : 0.35) ? 'mil' : 'civ');
-  }
+  // economia: leggi, linee di produzione, commercio, cantieri (economy.js)
+  Econ.aiThink(c);
   // reclutamento
   const myDivs = S.divs.filter(d => d.owner === c.code && !d.dead);
   const cap = Math.floor(c.mil * 1.2 + c.civ * 0.4) + 4;
   for (let k = 0; k < 2; k++) {
     if (myDivs.length + c.training.length >= cap) break;
     const type = c.armorTech && Math.random() < 0.22 ? 'arm' : 'inf';
-    if (c.equipment < UNIT_TYPES[type].eq * 1.3 || !recruit(c, type)) break;
+    if (!Econ.canPay(c, type, 1, 1.3) || !recruit(c, type)) break;
   }
   aiMilitary(c, myDivs);
 }

@@ -73,17 +73,17 @@ function hasHostile(ti, owner) {
   for (const d of a) if (!d.dead && atWar(d.owner, owner)) return true;
   return false;
 }
-function speedOf(d) { return UNIT_TYPES[d.type].speed * (1 + C(d.owner).speedBonus); }
+function speedOf(d) { return UNIT_TYPES[d.type].speed * (1 + C(d.owner).speedBonus) * Econ.fuelMod(d.owner, d.type); }
 function atkValue(d, ti) {
   const ut = UNIT_TYPES[d.type];
-  let v = ut.atk * (1 + C(d.owner).atkBonus) * d.str * (0.4 + 0.6 * d.org / ut.org);
+  let v = ut.atk * (1 + C(d.owner).atkBonus) * d.str * (0.4 + 0.6 * d.org / ut.org) * Econ.qualityMod(d.owner, d.type) * Econ.fuelMod(d.owner, d.type);
   if (d.type === 'arm' && ti != null) v *= TERRAIN[S.tiles[ti].terrain].arm;
   if (!S.tiles[d.tile].land) v *= 0.5; // sbarco dal mare
   return v;
 }
 function defValueOf(d) {
   const ut = UNIT_TYPES[d.type];
-  return ut.def * (1 + C(d.owner).defBonus) * d.str * (0.4 + 0.6 * d.org / ut.org);
+  return ut.def * (1 + C(d.owner).defBonus) * d.str * (0.4 + 0.6 * d.org / ut.org) * Econ.qualityMod(d.owner, d.type);
 }
 function defValue(ti, vsOwner) {
   const a = S.byTile.get(ti);
@@ -163,6 +163,7 @@ function newGame(player) {
     if (def.faction) { c.faction = def.faction; S.factions[def.faction].members.push(code); }
   }
   countTiles();
+  Econ.init();
   for (const code in S.countries) {
     const c = S.countries[code], def = COUNTRY_DEFS[code];
     c.manpower = c.tiles * 1000 + c.civ * 3000;
@@ -191,6 +192,7 @@ function tick() {
   if (START_TS + S.day * DAY_MS >= END_TS) { endGame('time'); return; }
   processEvents();
   countTiles();
+  Econ.worldDaily();
   for (const k in S.countries) if (S.countries[k].alive) economy(S.countries[k]);
   militaryStep();
   for (const k in S.countries) {
@@ -206,18 +208,9 @@ function factoryCap(c) { return Math.floor(c.tiles * 0.45) + 12; }
 
 function economy(c) {
   c.pp = Math.min(999, c.pp + c.ppGain);
-  c.manpower += c.tiles * 12 * (1 + c.mpBonus);
-  c.equipment += c.mil * 3 * (1 + c.eqBonus);
+  c.manpower += c.tiles * 12 * (1 + c.mpBonus + Econ.manpowerMod(c));
   const isP = c.code === S.player;
-  if (c.construction.length) {
-    const j = c.construction[0];
-    j.prog += Math.max(1, c.civ) * 0.15;
-    if (j.prog >= j.cost) {
-      c[j.type]++;
-      c.construction.shift();
-      if (isP) log(`Completata una nuova fabbrica ${j.type === 'civ' ? 'civile' : 'militare'}.`, 'good');
-    }
-  }
+  Econ.daily(c); // produzione, risorse, commercio e cantieri (economy.js)
   for (let i = c.training.length - 1; i >= 0; i--) {
     const tr = c.training[i];
     if (--tr.days > 0) continue;
@@ -247,20 +240,16 @@ function spawnTile(c) {
 
 // ---------- azioni economiche (giocatore e IA) ----------
 function canBuild(c) { return c.civ + c.mil + c.construction.length < factoryCap(c); }
-function queueBuild(c, type) {
-  if (!canBuild(c) || c.construction.length >= 5) return false;
-  c.construction.push({ type, prog: 0, cost: BUILD_COST[type] });
-  return true;
-}
+function queueBuild(c, type) { return Econ.queueBuild(c, type); }
 function canRecruit(c, type) {
   const ut = UNIT_TYPES[type];
   if (type === 'arm' && !c.armorTech) return false;
-  return c.equipment >= ut.eq && c.manpower >= ut.mp;
+  return Econ.canPay(c, type) && c.manpower >= ut.mp;
 }
 function recruit(c, type) {
   if (!canRecruit(c, type)) return false;
   const ut = UNIT_TYPES[type];
-  c.equipment -= ut.eq; c.manpower -= ut.mp;
+  Econ.pay(c, type); c.manpower -= ut.mp;
   c.training.push({ type, days: ut.days, total: ut.days });
   return true;
 }
@@ -382,8 +371,8 @@ function recover(d) {
   d.org = Math.min(ut.org, d.org + (d.path.length ? 1 : 3.5) * rb);
   if (d.str < 1 && allied(t.ctrl, d.owner)) {
     const need = Math.min(0.02 * rb, 1 - d.str);
-    const eq = need * ut.eq, mp = need * ut.mp;
-    if (c.equipment >= eq && c.manpower >= mp) { c.equipment -= eq; c.manpower -= mp; d.str += need; }
+    const mp = need * ut.mp;
+    if (Econ.canPay(c, d.type, need) && c.manpower >= mp) { Econ.pay(c, d.type, need); c.manpower -= mp; d.str += need; }
   }
 }
 

@@ -1,0 +1,19 @@
+/* Economia: poche aggiunte agli stili di base */
+.eco-subs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; margin: 8px 0 4px; }
+.eco-subs button { padding: 4px 2px; font-size: 11px; border-radius: 2px; }
+.eco-subs button.on { border-color: var(--gold); color: var(--gold); }
+.eco-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.eco-btns button { padding: 2px 7px; margin: 0; font-size: 12px; }
+button.eco-mini { padding: 0 5px; font-size: 11px; margin: 0; }
+.eco-eff { position: relative; }
+.eco-eff > i { position: absolute; top: 2px; bottom: 2px; width: 2px; background: #ff6b4a; }
+.bar.eff i { background: linear-gradient(90deg, #2f7a2f, var(--green)); }
+.eco-res { display: inline-block; min-width: 1.2em; text-align: center; }
+table.eco-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.eco-tbl th { color: var(--muted); font-weight: 400; text-align: right; padding: 2px 3px; }
+.eco-tbl td { text-align: right; padding: 2px 3px; border-top: 1px solid var(--line); }
+.eco-tbl td:first-child, .eco-tbl th:first-child { text-align: left; }
+.eco-tbl tr[data-act] { cursor: pointer; }
+.eco-tbl tr[data-act]:hover td, .eco-tbl tr.sel td { background: var(--panel2); }
+.qrow.eco-sell { grid-template-columns: 1fr auto auto auto; }
+.qrow.eco-q { grid-template-columns: 70px 1fr auto auto auto; }
