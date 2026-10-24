@@ -133,38 +133,53 @@ function hash3(a, b, c) {
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
-// coordinate normalizzate per il clima: 0 = sud/ovest, 1 = nord/est della mappa
+// clima di ogni casella: freddo invernale (wCold), tendenza al fango (wMud), emisfero australe (wSouth).
+// Con la mappa del mondo usa latitudine e longitudine reali, altrimenti la posizione sulla mappa europea.
 function landInitWeatherCoords() {
+  const T = S.tiles, geo = T.some(t => t.land && t.lat != null);
+  S.wCold = new Array(T.length).fill(0); S.wMud = new Array(T.length).fill(0); S.wSouth = new Array(T.length).fill(false);
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-  for (const t of S.tiles) if (t.land) { x0 = Math.min(x0, t.cx); x1 = Math.max(x1, t.cx); y0 = Math.min(y0, t.cy); y1 = Math.max(y1, t.cy); }
-  S.wLat = S.tiles.map(t => 1 - (t.cy - y0) / Math.max(1, y1 - y0));
-  S.wEast = S.tiles.map(t => (t.cx - x0) / Math.max(1, x1 - x0));
+  for (const t of T) if (t.land) { x0 = Math.min(x0, t.cx); x1 = Math.max(x1, t.cx); y0 = Math.min(y0, t.cy); y1 = Math.max(y1, t.cy); }
+  for (const t of T) {
+    if (!t.land) continue;
+    if (geo) {
+      const al = Math.abs(t.lat), lon = t.lon;
+      // continentalità: interno dell'Eurasia e del Nord America
+      let cont = 0;
+      if (t.lat > 35 && lon > 15 && lon < 140) cont = Math.min(1, (lon - 10) / 50);
+      else if (t.lat > 35 && lon > -115 && lon < -75) cont = 0.6;
+      S.wCold[t.i] = (al - 42) / 30 * 0.9 + cont * 0.35 - 0.1;
+      S.wMud[t.i] = al > 40 && al < 66 ? 0.2 + cont * 0.9 : al < 23 ? 0 : 0.1;
+      S.wSouth[t.i] = t.lat < 0;
+    } else {
+      const lat = 1 - (t.cy - y0) / Math.max(1, y1 - y0), east = (t.cx - x0) / Math.max(1, x1 - x0);
+      S.wCold[t.i] = lat * 0.9 + east * 0.6 - 0.55;
+      S.wMud[t.i] = (east * 1.3 + lat * 0.3 - 0.35) * Math.min(1, lat / 0.45);
+    }
+    if (t.terrain === 'mountain') S.wCold[t.i] += 0.25;
+  }
   // rumore per zone: regioni strategiche se la mappa le ha, altrimenti blocchi di ~4 esagoni
   const blk = (x1 - x0) / 22;
-  S.wZone = S.tiles.map(t => t.region != null && t.region >= 0 ? [t.region, 0] : [Math.floor(t.cx / blk), Math.floor(t.cy / blk)]);
+  S.wZone = T.map(t => t.region != null && t.region >= 0 ? [t.region, 0] : [Math.floor(t.cx / blk), Math.floor(t.cy / blk)]);
 }
+const W_WINTER = [1, 0.9, 0.4, 0, 0, 0, 0, 0, 0, 0.1, 0.45, 0.75];
+const W_MUDM = [0, 0, 0.5, 0.6, 0.15, 0, 0, 0, 0.1, 0.55, 0.7, 0.2];
+const W_RAINM = [0.2, 0.2, 0.3, 0.35, 0.3, 0.15, 0.1, 0.1, 0.25, 0.35, 0.4, 0.25];
 function updateWeather() {
-  const dt = dayDate(S.day), m = dt.getUTCMonth();
-  const winter = [1, 0.9, 0.4, 0, 0, 0, 0, 0, 0, 0.1, 0.45, 0.75][m];
-  const mud = [0, 0, 0.5, 0.6, 0.15, 0, 0, 0, 0.1, 0.55, 0.7, 0.2][m];
-  const rain = [0.2, 0.2, 0.3, 0.35, 0.3, 0.15, 0.1, 0.1, 0.25, 0.35, 0.4, 0.25][m];
+  const m = dayDate(S.day).getUTCMonth();
   const period = Math.floor(S.day / 6);
-  if (!S.wLat) landInitWeatherCoords();
+  if (!S.wCold) landInitWeatherCoords();
   for (const t of S.tiles) {
-    if (!t.land) { S.weather[t.i] = W_CLEAR; continue; }
-    const lat = S.wLat[t.i], east = S.wEast[t.i], z = S.wZone[t.i];
+    if (!t.land || t.terrain === 'desert') { S.weather[t.i] = W_CLEAR; continue; }
+    const mm = S.wSouth[t.i] ? (m + 6) % 12 : m; // stagioni invertite a sud dell'equatore
+    const z = S.wZone[t.i];
     const n = hash3(z[0], z[1], period) - 0.5, n2 = hash3(z[1] + 911, z[0], period + 7);
-    if (t.terrain === 'desert') { S.weather[t.i] = W_CLEAR; continue; }
-    const cold = lat * 0.9 + east * 0.6 - 0.55 + (t.terrain === 'mountain' ? 0.25 : 0);
-    const snow = cold * winter + n * 0.3;
+    const snow = S.wCold[t.i] * W_WINTER[mm] + n * 0.3;
     let w = W_CLEAR;
     if (snow > 0.55) w = W_DEEP;
     else if (snow > 0.28) w = W_SNOW;
-    else {
-      const mudScore = mud * (east * 1.3 + lat * 0.3 - 0.35) * Math.min(1, lat / 0.45) + n * 0.25;
-      if (mudScore > 0.3) w = W_MUD;
-      else if (n2 < rain * 0.6) w = W_RAIN;
-    }
+    else if (W_MUDM[mm] * S.wMud[t.i] + n * 0.25 > 0.3) w = W_MUD;
+    else if (n2 < W_RAINM[mm] * 0.6) w = W_RAIN;
     S.weather[t.i] = w;
   }
 }
