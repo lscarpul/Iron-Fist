@@ -306,7 +306,7 @@ defTree('I', "Regno d'Italia", [
   F('I_albania', 'Protettorato albanese', 3, { pre: ['I_steel'], y: 4, cond: { date: '1939-04-01', alive: 'ALB' }, eff: { annex: 'ALB' }, ai: 10 }),
   F('I_spagna', 'Intervento in Spagna', 0, { pre: ['I_axis'], eff: { xp: { army: 40, air: 30 } }, ai: 9, ic: '🎖️' }),
   F('I_steel', "Patto d'Acciaio", 2, { pre: ['I_axis'], cond: { date: '1939-05-01' }, eff: { mods: { war_support: 0.1 }, mil: 1 }, ai: 10 }),
-  F('I_danube', 'Influenza danubiana', 0, { pre: ['I_spagna'], eff: { invite: ['H', 'R', 'L'] }, ai: 8 }),
+  F('I_danube', 'Influenza danubiana', 0, { pre: ['I_spagna'], eff: { invite: 'H', mods: { stability: 0.03 } }, ai: 8 }),
   F('I_nizza', 'Nizza e Savoia', 3, { pre: ['I_steel'], cond: { date: '1940-06-01', alive: 'F', atWarWith: 'U' }, eff: { war: 'F' }, ai: 10 }),
   F('I_reni', 'Spezzare le reni alla Grecia', 1, { pre: ['I_danube', 'I_steel'], y: 4, cond: { date: '1940-10-01', alive: 'Q' }, eff: { war: 'Q' }, ai: 10 }),
   F('I_dalmazia', 'Pretese sulla Dalmazia', 0, { pre: ['I_reni'], cond: { year: 1941, alive: 'Y' }, eff: { war: 'Y' }, ai: 10 }),
