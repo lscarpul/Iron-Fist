@@ -210,7 +210,7 @@ defTree('U', 'Regno Unito', [
   F('U_appease', 'Appeasement', 1, { pre: ['U_abdic'], eff: { mods: { stability: 0.1 }, civ: 1 }, ai: 10, ic: '🕊️' }),
   F('U_rearm', 'Riarmo della Gran Bretagna', 3, { pre: ['U_abdic'], cond: { year: 1937 }, eff: { mil: 3, mods: { war_support: 0.05 } }, ai: 10 }),
   F('U_guar', 'Garanzie europee', 1, { pre: ['U_appease'], cond: { date: '1939-03-01' }, eff: { guarantee: ['P', 'Q', 'R'] }, ai: 10 }),
-  F('U_entente', 'Allargare l\'Intesa', 3, { pre: ['U_rearm'], cond: { year: 1939, war: true }, eff: { invite: ['B', 'HOL', 'N', 'D', 'W'] }, ai: 10 }),
+  F('U_entente', 'Allargare l\'Intesa', 3, { pre: ['U_rearm'], cond: { year: 1939 }, eff: { guarantee: ['B', 'HOL', 'N', 'D'] }, ai: 10 }),
   F('U_churchill', 'Churchill al governo', 2, { pre: ['U_guar', 'U_entente'], cond: { war: true }, eff: { leader: 'Winston Churchill', ppGain: 0.5, mods: { war_support: 0.2 } }, ai: 10, ic: '🎩' }),
   F('U_turkey', 'Corteggiare la Turchia', 0, { pre: ['U_churchill'], cond: { alive: 'T' }, eff: { invite: ['T', 'Q', 'Y'] }, ai: 8 }),
   F('U_arsenal', 'Arsenale della democrazia', 2, { pre: ['U_churchill'], eff: { equipment: 15000, mil: 2 }, ai: 9, ic: '📦' }),
