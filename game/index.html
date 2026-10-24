@@ -10,52 +10,62 @@
 <link rel="stylesheet" href="css/economia.css">
 <link rel="stylesheet" href="css/land.css">
 <link rel="stylesheet" href="css/airnaval.css">
+<link rel="icon" href="img/icon.png">
 </head>
 <body>
 
 <div id="start">
+  <div class="start-bg"></div>
   <div class="start-inner">
-    <h1>IRON FIST</h1>
-    <p class="sub">Europa, 1° gennaio 1936. Scegli la nazione da guidare attraverso la tempesta.</p>
-    <h2>Grandi potenze</h2>
-    <div id="majors" class="cgrid"></div>
-    <h2>Nazioni minori</h2>
-    <div id="minors" class="cgrid"></div>
+    <header class="start-head">
+      <img class="start-logo" src="img/logo.jpg" alt="">
+      <div><h1>IRON FIST</h1>
+      <p class="sub">Europa, 1° gennaio 1936. Scegli la nazione da guidare attraverso la tempesta.</p></div>
+    </header>
+    <div class="start-body">
+      <section class="start-list">
+        <h2>Grandi potenze</h2>
+        <div id="majors" class="cgrid"></div>
+        <h2>Nazioni minori</h2>
+        <div id="minors" class="cgrid"></div>
+      </section>
+      <aside id="start-pick" class="start-pick"></aside>
+    </div>
     <details><summary>Come si gioca</summary><div id="start-help"></div></details>
   </div>
 </div>
 
 <div id="game" class="hidden">
-  <header id="topbar">
-    <div id="tb-country"></div>
-    <div id="tb-res"></div>
-    <div id="tb-time">
-      <div id="tb-date"></div>
-      <div id="tb-speed">
-        <button data-speed="0" title="Pausa (Spazio)">❚❚</button>
-        <button data-speed="1" title="Velocità 1">1</button>
-        <button data-speed="2" title="Velocità 2">2</button>
-        <button data-speed="3" title="Velocità 3">3</button>
-        <button data-speed="4" title="Velocità 4">4</button>
-        <button data-speed="5" title="Velocità 5">5</button>
-      </div>
-      <button id="btn-help" title="Aiuto">?</button>
-    </div>
-  </header>
-  <div id="side">
-    <nav id="tabs">
-      <button data-tab="politica">Politica</button>
-      <button data-tab="produzione">Produzione</button>
-      <button data-tab="esercito">Esercito</button>
-      <button data-tab="diplomazia">Diplomazia</button>
-    </nav>
-    <aside id="panel"></aside>
-    <section id="log"></section>
-  </div>
   <main id="mapwrap">
     <canvas id="map"></canvas>
     <div id="tooltip" class="hidden"></div>
   </main>
+
+  <header id="topbar">
+    <button id="tb-country" data-open="politica" title="Politica"></button>
+    <nav id="tabs"></nav>
+    <div id="tb-res"></div>
+    <div id="tb-war"></div>
+    <div id="tb-time">
+      <div id="tb-date"></div>
+      <div id="tb-speed"></div>
+    </div>
+    <button id="btn-help" class="tb-icon" title="Aiuto"></button>
+  </header>
+  <div id="alerts"></div>
+
+  <section id="panel" class="hidden">
+    <header id="panel-head"></header>
+    <div id="panel-body"></div>
+  </section>
+
+  <section id="logbox" class="collapsed">
+    <button id="log-toggle"></button>
+    <div id="log"></div>
+  </section>
+
+  <section id="unitbar" class="hidden"></section>
+  <nav id="mapmodes" class="hidden"></nav>
 </div>
 
 <div id="modal-bg" class="hidden"><div id="modal"></div></div>
@@ -82,7 +92,9 @@
 <script src="js/ai.js"></script>
 <script src="js/research.js"></script>
 <script src="js/render.js"></script>
+<script src="js/icons.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/ui-panels.js"></script>
 <script src="js/panels/land_shim.js"></script>
 <script src="js/land/render_land.js"></script>
 <script src="js/airnaval-data.js"></script>
@@ -90,7 +102,7 @@
 <script src="js/air.js"></script>
 <script src="js/naval.js"></script>
 <script src="js/airnaval-ui.js"></script>
-<!-- PANELS:BEGIN -->
+<!-- PANELS:BEGIN  (un file per sistema: aggiungi qui il tuo <script src="js/panels/...">) -->
 <script src="js/panels/focus.js"></script>
 <script src="js/panels/economia.js"></script>
 <script src="js/panels/ricerca.js"></script>

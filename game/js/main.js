@@ -8,15 +8,32 @@ function buildStartScreen() {
   const card = code => {
     const d = COUNTRY_DEFS[code];
     return `<button class="ccard ${d.major ? 'major' : ''}" data-code="${code}">
-      <span class="flag big" style="background:${d.color}"></span>
+      <span class="flag big" style="background-color:${d.color}"></span>
       <span class="cname">${d.name}</span>
-      <span class="cinfo">🏭 ${d.civ} · ⚙️ ${d.mil} · 🎖️ ${d.inf + d.arm}${d.faction ? ` · ${fac[d.faction]}` : ''}</span>
+      <span class="cinfo">${icon('factory', 12)} ${d.civ + d.mil} · ${icon('division', 12)} ${d.inf + d.arm}${d.faction ? ` · ${fac[d.faction]}` : ''}</span>
     </button>`;
+  };
+  const pick = code => {
+    const d = COUNTRY_DEFS[code];
+    document.querySelectorAll('.ccard').forEach(b => b.classList.toggle('on', b.dataset.code === code));
+    $('start-pick').innerHTML = `<span class="flag big" style="background-color:${d.color}"></span>
+      <h3>${d.name}</h3><p class="sub">${d.major ? 'Grande potenza' : 'Nazione minore'}${d.faction ? ` · ${fac[d.faction]}` : ''}</p>
+      <div class="stats">
+        <div class="stat">${icon('factory', 16)}<b>${d.civ}</b><small>civili</small></div>
+        <div class="stat">${icon('milfactory', 16)}<b>${d.mil}</b><small>militari</small></div>
+        <div class="stat">${icon('division', 16)}<b>${d.inf + d.arm}</b><small>divisioni</small></div>
+      </div>
+      <button class="primary" id="btn-play">Gioca</button>`;
+    $('btn-play').addEventListener('click', () => startGame(code));
   };
   $('majors').innerHTML = order.filter(c => COUNTRY_DEFS[c].major).map(card).join('');
   $('minors').innerHTML = order.filter(c => !COUNTRY_DEFS[c].major).map(card).join('');
   $('start-help').innerHTML = HELP_HTML;
-  document.querySelectorAll('.ccard').forEach(b => b.addEventListener('click', () => startGame(b.dataset.code)));
+  document.querySelectorAll('.ccard').forEach(b => {
+    b.addEventListener('click', () => pick(b.dataset.code));
+    b.addEventListener('dblclick', () => startGame(b.dataset.code));
+  });
+  pick(order[0]);
 }
 
 function startGame(code) {
