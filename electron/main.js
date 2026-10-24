@@ -2,6 +2,7 @@
 // Avvio dell'app desktop: apre il gioco (cartella game/) in una finestra nativa.
 const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
+const governo = require('./ai-bridge');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -18,6 +19,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
   win.once('ready-to-show', () => { win.maximize(); win.show(); });
@@ -37,5 +39,5 @@ function createWindow() {
 }
 
 Menu.setApplicationMenu(null);
-app.whenReady().then(createWindow);
+app.whenReady().then(() => { governo.register(); createWindow(); });
 app.on('window-all-closed', () => app.quit());
