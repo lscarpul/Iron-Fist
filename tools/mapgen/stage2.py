@@ -1,6 +1,6 @@
 """Seconda fase del generatore: attributi delle province e degli stati, vettorializzazione
 dei confini e scrittura di game/js/map-data.js. Chiamata da build_map.py."""
-import json, math, os, subprocess
+import json, math, os, re, subprocess
 import numpy as np
 from scipy import ndimage
 from shapely.geometry import shape, LineString, Point, Polygon, MultiPolygon, mapping
@@ -54,6 +54,21 @@ CITY_NAMES = {
 DEV_TERRAIN_ORDER = ['plains', 'forest', 'hills', 'mountain', 'desert', 'marsh', 'urban']
 
 
+ADMIN_WORDS = re.compile(r"^(dipartimento|regione( autonoma)?|divisione|quartiere|distrett[oi]|territorio|"
+                         r"parco nazionale|contea|provincia|stato|governatorato|circondario|"
+                         r"okrug autonomo|repubblica)\s+", re.I)
+ARTICLES = re.compile(r"^(dell'|dello|della|delle|degli|dei|del|di|de)\s*", re.I)
+
+
+def tidy_state_name(nm):
+    short = ARTICLES.sub('', ADMIN_WORDS.sub('', nm))
+    first = short.split(' ')[0].lower()
+    if len(short) < 3 or first in ('orientale', 'occidentale', 'settentrionale', 'meridionale', 'centrale',
+                                   'nord', 'sud', 'est', 'ovest', 'capitale'):
+        short = nm  # resterebbe solo un punto cardinale: tieni il nome intero
+    return short[:1].upper() + short[1:]
+
+
 def run(G, land, lake, ctry, adm, adm_feats, st, smeta, prov, pstate, sreg, sregmeta):
     say, to_px, load, H, W, KM, CACHE = G['say'], G['to_px'], G['load'], G['H'], G['W'], G['KM'], G['CACHE']
     PX_KM2 = KM * KM
@@ -62,10 +77,15 @@ def run(G, land, lake, ctry, adm, adm_feats, st, smeta, prov, pstate, sreg, sreg
     NL = sum(1 for p in pstate if p[0] == 'L')
     ids = np.arange(1, N + 1)
     lon, lat = G['pixel_lonlat']()
+    for m in smeta:  # nomi degli stati senza "regione di", "dipartimento del"... e con la maiuscola
+        m['name'] = tidy_state_name(m['name'])
 
     # ---------- geometria di base ----------
     say('statistiche delle province')
     area_px = np.bincount(prov.ravel(), minlength=N + 1)[1:].astype(float)
+    rows_ = np.repeat(np.arange(H), W).reshape(H, W)
+    area_km = np.bincount(prov.ravel(), weights=G['ROW_KM2'][rows_].ravel(), minlength=N + 1)[1:]
+    del rows_
     bnd = np.zeros((H, W), bool)
     bnd[:, 1:] |= prov[:, 1:] != prov[:, :-1]
     bnd[:, :-1] |= prov[:, 1:] != prov[:, :-1]
@@ -78,7 +98,7 @@ def run(G, land, lake, ctry, adm, adm_feats, st, smeta, prov, pstate, sreg, sreg
 
     # ---------- terreno ----------
     say('terreno da rilievo e copertura del suolo')
-    z = np.load(os.path.join(G['DATA'], 'elev_z6.npz'))
+    z = np.load(os.path.join(G['DATA'], 'elev_z5.npz'))
     elev, ez, ex0, ey0 = z['elev'], int(z['z']), int(z['x0']), int(z['y0'])
     n = 2 ** ez
     mx = (((lon + 180) / 360 * n) - ex0) * 256
@@ -86,9 +106,10 @@ def run(G, land, lake, ctry, adm, adm_feats, st, smeta, prov, pstate, sreg, sreg
     my = (((1 - np.arcsinh(np.tan(latr)) / math.pi) / 2 * n) - ey0) * 256
     eg = ndimage.map_coordinates(elev, [my.ravel(), mx.ravel()], order=1, mode='nearest').reshape(H, W)
     eg = np.maximum(eg, 0)
-    gy, gx = np.gradient(eg, KM)  # metri per km
-    slope = np.hypot(gx, gy)
-    z = np.load(os.path.join(G['DATA'], 'landcover.npz'))
+    gy, gx = np.gradient(eg)  # metri per pixel, poi in metri per km reali (Miller)
+    latc = np.radians(lat[:, :1])
+    slope = np.hypot(gx / (KM * np.cos(latc)), gy / (KM * np.cos(0.8 * latc)))
+    z = np.load(os.path.join(G['DATA'], 'landcover_world.npz'))
     lc, lon0, lat1, res = z['lc'], float(z['lon0']), float(z['lat1']), float(z['res'])
     ri = np.clip(((lat1 - lat) / res).astype(int), 0, lc.shape[0] - 1)
     ci = np.clip(((lon - lon0) / res).astype(int), 0, lc.shape[1] - 1)
@@ -102,19 +123,22 @@ def run(G, land, lake, ctry, adm, adm_feats, st, smeta, prov, pstate, sreg, sreg
     m_slope = ndimage.mean(slope, prov, ids)
     p_slope = ndimage.maximum(ndimage.uniform_filter(slope, 5), prov, ids)
     built_px = np.bincount(prov.ravel(), weights=(lcg == 50).ravel().astype(float), minlength=N + 1)[1:]
+    # soglie relative: il rilievo a bassa risoluzione appiattisce i pendii
+    q = np.percentile(m_slope[:NL], [76, 93])
+    say('pendenza media province: soglie colline %.1f, montagne %.1f m/km' % tuple(q))
     terrain = []
     for i in range(N):
         if i >= NL:
             terrain.append('sea')
             continue
         s, e = m_slope[i], m_elev[i]
-        if f_built[i] > 0.16 and area_px[i] * PX_KM2 < 6000:
+        if f_built[i] > 0.16 and area_km[i] < 6000:
             t = 'urban'
-        elif s > 95 or (s > 70 and e > 900):
+        elif s > q[1] or (s > q[0] and e > 2500) or e > 3800:
             t = 'mountain'
-        elif f_bare[i] + 0.5 * f_shrub[i] > 0.55:
+        elif f_bare[i] + 0.5 * f_shrub[i] > 0.55 and s < q[0] * 1.3:
             t = 'desert'
-        elif s > 38 or e > 1100:
+        elif s > q[0] or e > 1100:
             t = 'hills'
         elif f_wet[i] > 0.10:
             t = 'marsh'
@@ -171,8 +195,6 @@ def run(G, land, lake, ctry, adm, adm_feats, st, smeta, prov, pstate, sreg, sreg
     for f in feats:
         p = f['properties']
         lo, la = p['longitude'], p['latitude']
-        if not (-45 < lo < 80 and 18 < la < 82):
-            continue
         x, y = to_px(lo, la)
         if not (0 <= x < W and 0 <= y < H):
             continue
@@ -242,11 +264,11 @@ def run(G, land, lake, ctry, adm, adm_feats, st, smeta, prov, pstate, sreg, sreg
         lines = [g['coordinates']] if g['type'] == 'LineString' else g['coordinates']
         for ln in lines:
             a = np.array(ln)
-            if not ((a[:, 0] > -40) & (a[:, 0] < 75) & (a[:, 1] > 20)).any():
-                continue
             xs, ys = to_px(a[:, 0], a[:, 1])
             pts = []
             for j in range(len(xs) - 1):
+                if abs(xs[j + 1] - xs[j]) > W / 2:
+                    continue  # attraversa la giunzione della mappa
                 d = math.hypot(xs[j + 1] - xs[j], ys[j + 1] - ys[j])
                 m = max(1, int(d / 0.6))
                 t = np.linspace(0, 1, m, endpoint=False)
@@ -341,7 +363,7 @@ def run(G, land, lake, ctry, adm, adm_feats, st, smeta, prov, pstate, sreg, sreg
     st_area = np.zeros(NS)
     for s in range(NS):
         ps = st_prov[s]
-        st_area[s] = sum(area_px[i] for i in ps) * PX_KM2
+        st_area[s] = sum(area_km[i] for i in ps)
         st_built[s] = sum(built_px[i] for i in ps)
         weight[s] = st_built[s] * 3 + sum(pop_city[i] for i in ps) / 4000 + st_area[s] / 400
     st_pop = np.zeros(NS)
@@ -381,7 +403,7 @@ def run(G, land, lake, ctry, adm, adm_feats, st, smeta, prov, pstate, sreg, sreg
         capital = max(ps, key=lambda i: (vp[i], pop_city[i], built_px[i], area_px[i]))
         states.append(dict(name=m['name'], owner=m['owner'], provinces=ps, capital=int(capital),
                            manpower=int(round(pop, -3)), infra=infra, category=cat, slots=slots,
-                           industry=round(float(st_built[s] * PX_KM2 * dev), 1),
+                           industry=round(float(st_built[s] / max(1, sum(area_px[i] for i in ps)) * st_area[s] * dev), 1),
                            resources=res_st[s], area=int(st_area[s])))
     # rinumera eliminando stati vuoti
     keep = [s for s in range(NS) if states[s]]
@@ -402,8 +424,8 @@ def run(G, land, lake, ctry, adm, adm_feats, st, smeta, prov, pstate, sreg, sreg
     sc = np.array([[np.mean([label_pt[i][0] for i in s['provinces']]),
                     np.mean([label_pt[i][1] for i in s['provinces']])] for s in states])
     sa = np.array([s['area'] for s in states], float)
-    k = max(8, int(round(sa.sum() / 230000)))
-    cent = G['kmeans'](np.repeat(sc, np.maximum(1, (sa / 5000).astype(int)), 0), k)
+    k = max(8, len(states) // 7)
+    cent = G['kmeans'](sc, k, iters=25)
     lab = G['assign'](sc, cent)
     regions = []
     reg_of_state = np.zeros(len(states), int)
@@ -457,8 +479,10 @@ def run(G, land, lake, ctry, adm, adm_feats, st, smeta, prov, pstate, sreg, sreg
     # ---------- uscita ----------
     provinces = []
     for i in range(N):
+        lo_, la_ = G['px_lonlat'](label_pt[i][0] - 0.5, label_pt[i][1] - 0.5)
         p = dict(id=i, type='land' if is_land[i] else 'sea', x=round(label_pt[i][0], 1),
-                 y=round(label_pt[i][1], 1), area=int(area_px[i] * PX_KM2), terrain=terrain[i],
+                 y=round(label_pt[i][1], 1), lon=round(float(lo_), 2), lat=round(float(la_), 2),
+                 area=int(area_km[i]), terrain=terrain[i],
                  region=prov_region[i], rings=topo['rings'][i])
         if is_land[i]:
             p['state'] = int(pst[i])
@@ -484,8 +508,8 @@ def run(G, land, lake, ctry, adm, adm_feats, st, smeta, prov, pstate, sreg, sreg
     for i, j, nm in straits:
         adjl.append([i, j, 0, 2])
     data = dict(
-        version=1, year=1936, name='Europa e Mediterraneo 1936', projection=G['PROJ'],
-        kmPerUnit=KM, width=W, height=H, quant=topo['quant'],
+        version=2, year=1936, name='Mondo 1936', projection=G['PROJ'], wrapX=True,
+        kmPerUnit=KM, width=W, height=H, quant=topo['quant'], reliefScale=2,
         countries=countries, states=states, regions=regions, provinces=provinces,
         adjacency=adjl, straits=[[i, j, nm] for i, j, nm in straits], railways=rails,
         rivers=rivers, arcs=topo['arcs'], arcSides=topo['sides'],
@@ -516,6 +540,7 @@ def relief(eg, land, KM, out, say):
     v = np.clip(v, 0, 255)
     v = (np.round(v / 6) * 6).clip(0, 255).astype(np.uint8)
     a = np.where(land, 255, 0).astype(np.uint8)
+    v, a = v[::2, ::2], a[::2, ::2]  # meta' risoluzione: basta come texture
     os.makedirs(os.path.dirname(out), exist_ok=True)
     Image.fromarray(np.dstack([v, a]), 'LA').save(out, optimize=True)
     say('rilievo', out, os.path.getsize(out) // 1024, 'KB')
@@ -536,26 +561,33 @@ def vectorize(prov, N, CACHE, say):
         json.dump(dict(type='FeatureCollection', features=feats), f)
     here = os.path.dirname(os.path.abspath(__file__))
     cmd = ['npx', '--yes', 'mapshaper@0.6.102', '-i', gj, '-o', tj, 'format=topojson', 'no-quantization', 'force']
-    subprocess.run(cmd, check=True, cwd=here)
+    subprocess.run(cmd, check=True, cwd=here, env=dict(os.environ, NODE_OPTIONS='--max-old-space-size=10000'))
     with open(tj) as f:
         t = json.load(f)
     arcs = t['arcs']
     obj = next(iter(t['objects'].values()))
     rings = [[] for _ in range(N)]
-    sides = [[-1, -1] for _ in arcs]
     for g in obj['geometries']:
         i = g['properties']['id']
         polys = g['arcs'] if g['type'] == 'MultiPolygon' else [g['arcs']]
         for poly in polys:
             for ring in poly:
                 rings[i].append(ring)
-                for a in ring:
-                    k = a if a >= 0 else ~a
-                    s = sides[k]
-                    if s[0] < 0:
-                        s[0] = i
-                    elif s[0] != i and s[1] < 0:
-                        s[1] = i
+    # province ai due lati di ogni arco, lette dal raster a meta' del primo segmento
+    # (non dalla topologia: mapshaper non sempre fonde i tratti dritti con vertici diversi)
+    H, W = prov.shape
+    sides = []
+    for a in arcs:
+        (x0, y0), (x1, y1) = a[0], a[1]
+        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+        if y0 == y1:   # segmento orizzontale: pixel sopra e sotto
+            c = int(math.floor(mx))
+            pts = [(int(y0) - 1, c), (int(y0), c)]
+        else:          # verticale: pixel a sinistra e a destra
+            r = int(math.floor(my))
+            pts = [(r, int(x0) - 1), (r, int(x0))]
+        sd = [int(prov[r, c]) - 1 if 0 <= r < H and 0 <= c < W else -1 for r, c in pts]
+        sides.append(sd if sd[0] >= 0 else [sd[1], sd[0]])
     # smussatura (Chaikin) degli archi a scalini, estremi fissi; quantizzazione a 1/4 di unita'
     Q = 4
     out = []

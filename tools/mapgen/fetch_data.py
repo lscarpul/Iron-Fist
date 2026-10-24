@@ -21,7 +21,7 @@ NE = ['ne_10m_admin_1_states_provinces', 'ne_10m_populated_places_simple', 'ne_1
       'ne_10m_minor_islands']
 
 # area scaricata (lon/lat), un po' piu' larga dell'area di gioco
-LON0, LON1, LAT0, LAT1 = -33, 66, 24, 75
+LON0, LON1, LAT0, LAT1 = -180, 180, -60, 84
 
 
 def get(url, dst):
@@ -41,7 +41,7 @@ def vector():
             os.path.join(DATA, n + '.geojson'))
 
 
-def elevation(z=6):
+def elevation(z=5):
     """Mosaico di quote (metri) in proiezione web mercator, zoom z."""
     import math
     from PIL import Image
@@ -50,8 +50,8 @@ def elevation(z=6):
         return
     n = 2 ** z
     tx = lambda lon: int((lon + 180) / 360 * n)
-    ty = lambda lat: int((1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * n)
-    x0, x1, y0, y1 = tx(LON0), tx(LON1), ty(LAT1), ty(LAT0)
+    ty = lambda lat: min(n - 1, int((1 - math.asinh(math.tan(math.radians(max(-85, min(85, lat))))) / math.pi) / 2 * n))
+    x0, x1, y0, y1 = tx(LON0), min(n - 1, tx(LON1)), ty(LAT1), ty(LAT0)
     mos = np.zeros(((y1 - y0 + 1) * 256, (x1 - x0 + 1) * 256), np.float32)
 
     def one(xy):
@@ -69,9 +69,9 @@ def elevation(z=6):
     print('quote', mos.shape)
 
 
-def landcover(res=0.01):
+def landcover(res=0.025):
     """Mosaico ESA WorldCover in lat/lon a 'res' gradi (classe 0 = dato mancante / mare)."""
-    out = os.path.join(DATA, 'landcover.npz')
+    out = os.path.join(DATA, 'landcover_world.npz')
     if os.path.exists(out):
         return
     import rasterio
@@ -99,7 +99,7 @@ def landcover(res=0.01):
 
     jobs = [(la, lo) for la in lat_tiles for lo in lon_tiles]
     done = 0
-    with cf.ThreadPoolExecutor(24) as ex:
+    with cf.ThreadPoolExecutor(32) as ex:
         for lat, lon, a in ex.map(one, jobs):
             done += 1
             if a is None:
@@ -107,7 +107,7 @@ def landcover(res=0.01):
             r0 = (top - (lat + 3)) * per // 3
             c0 = (lon - lon_tiles[0]) * per // 3
             mos[r0:r0 + per, c0:c0 + per] = a
-            if done % 50 == 0:
+            if done % 500 == 0:
                 print('copertura suolo', done, '/', len(jobs), flush=True)
     np.savez_compressed(out, lc=mos, lon0=lon_tiles[0], lat1=top, res=res)
     print('copertura suolo', mos.shape)

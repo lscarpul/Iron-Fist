@@ -23,7 +23,9 @@ function mapEdge(a, b) { return MAP.edges.get(edgeKey(a, b)) || null; }
 // distanza in km tra i centri di due province
 function provDistKm(a, b) {
   const p = MAP.data.provinces[a], q = MAP.data.provinces[b];
-  return Math.hypot(p.x - q.x, p.y - q.y) * MAP.data.kmPerUnit;
+  const r = Math.PI / 180, dLat = (q.lat - p.lat) * r, dLon = (q.lon - p.lon) * r;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(p.lat * r) * Math.cos(q.lat * r) * Math.sin(dLon / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h)); // distanza sul globo
 }
 
 function decodeArcs(D) {
@@ -69,7 +71,7 @@ function buildMap() {
       cx: p.x, cy: p.y, x: p.x, y: p.y,
       state: land ? p.state : -1, region: p.region, area: p.area,
       city: p.city || null, port: p.port || 0, rail: p.rail || 0, hub: !!p.hub,
-      infra: st ? st.infra : 0, elev: p.elev || 0,
+      infra: st ? st.infra : 0, elev: p.elev || 0, lon: p.lon, lat: p.lat,
     };
   });
   for (const [a, b] of D.adjacency) {

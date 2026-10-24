@@ -9,6 +9,26 @@
 //    view = { s, tx, ty, lw } dove lw = spessore di 1 pixel schermo in unità del mondo.
 //  - Render.modeColors[m] = (t) => colore: colora le province per una modalità nuova.
 
+// linee divise in blocchi spaziali: a zoom alto si disegnano solo i blocchi visibili
+class ChunkedPath {
+  constructor(size = 500) { this.size = size; this.chunks = new Map(); }
+  line(pts) {
+    const k = (Math.floor(pts[0] / this.size) + 64) * 4096 + Math.floor(pts[1] / this.size) + 64;
+    let c = this.chunks.get(k);
+    if (!c) this.chunks.set(k, c = { p: new Path2D(), b: [Infinity, Infinity, -Infinity, -Infinity] });
+    const b = c.b;
+    for (let j = 0; j < pts.length; j += 2) {
+      const x = pts[j], y = pts[j + 1];
+      j ? c.p.lineTo(x, y) : c.p.moveTo(x, y);
+      if (x < b[0]) b[0] = x; if (x > b[2]) b[2] = x; if (y < b[1]) b[1] = y; if (y > b[3]) b[3] = y;
+    }
+  }
+  stroke(ctx, vb) {
+    for (const c of this.chunks.values())
+      if (c.b[2] >= vb[0] && c.b[0] <= vb[2] && c.b[3] >= vb[1] && c.b[1] <= vb[3]) ctx.stroke(c.p);
+  }
+}
+
 const TERRAIN_COLORS = {
   plains: '#a9b46a', forest: '#4f7a3a', hills: '#a58a5a', mountain: '#8a7a6e',
   desert: '#d9c27e', marsh: '#5f8a76', urban: '#9a8f8a',
@@ -76,20 +96,17 @@ const Render = {
     this.hitCtx = document.createElement('canvas').getContext('2d');
     // fiumi
     this.rivers = [1, 2, 3].map(w => {
-      const path = new Path2D();
-      for (const r of D.rivers) {
-        if (r.w !== w) continue;
-        for (let k = 0; k < r.pts.length; k += 2) k ? path.lineTo(r.pts[k], r.pts[k + 1]) : path.moveTo(r.pts[k], r.pts[k + 1]);
-      }
+      const path = new ChunkedPath();
+      for (const r of D.rivers) if (r.w === w) path.line(r.pts);
       return path;
     });
     // ferrovie per livello
     this.rails = [1, 2, 3, 4, 5].map(l => {
-      const path = new Path2D();
+      const path = new ChunkedPath();
       for (const [a, b, lvl] of D.railways) {
         if (lvl !== l) continue;
         const p = D.provinces[a], q = D.provinces[b];
-        path.moveTo(p.x, p.y); path.lineTo(q.x, q.y);
+        path.line([p.x, p.y, q.x, q.y]);
       }
       return path;
     });
@@ -106,10 +123,29 @@ const Render = {
     if (this.layer) { this.layer.width = this.cv.width; this.layer.height = this.cv.height; this.layerKey = ''; }
   },
   fit() {
-    const s = Math.min(this.cw / this.ww, this.ch / this.wh) * 1.02;
+    const s = this.minZoom();
     this.view.s = s;
     this.view.tx = (this.cw - this.ww * s) / 2;
     this.view.ty = (this.ch - this.wh * s) / 2;
+  },
+  // la mappa del mondo si richiude in orizzontale: lo zoom minimo la fa stare in altezza
+  minZoom() { return MAP_DATA.wrapX ? this.ch / this.wh : Math.min(this.cw / this.ww, this.ch / this.wh) * 0.8; },
+  clampView() {
+    const v = this.view;
+    v.s = Math.max(this.minZoom(), v.s);
+    if (MAP_DATA.wrapX) {
+      const W = this.ww * v.s, c = (this.cw / 2 - v.tx) / W;
+      v.tx += Math.floor(c) * W;  // il centro dello schermo resta nella copia principale
+    }
+    const H = this.wh * v.s;
+    v.ty = H <= this.ch ? (this.ch - H) / 2 : Math.min(0, Math.max(this.ch - H, v.ty));
+  },
+  // spostamenti (in unità mappa) delle copie della mappa visibili sullo schermo
+  copies(v, wpx) {
+    if (!MAP_DATA.wrapX) return [0];
+    const W = this.ww * v.s, out = [];
+    for (let k = -2; k <= 2; k++) if (v.tx + k * W < wpx && v.tx + (k + 1) * W > 0) out.push(k * this.ww);
+    return out;
   },
   centerOn(ti, zoom) {
     const t = S.tiles[ti];
@@ -120,13 +156,13 @@ const Render = {
   toWorld(sx, sy) { return [(sx - this.view.tx) / this.view.s, (sy - this.view.ty) / this.view.s]; },
   zoomAt(sx, sy, f) {
     const [wx, wy] = this.toWorld(sx, sy);
-    const min = Math.min(this.cw / this.ww, this.ch / this.wh) * 0.8;
-    this.view.s = Math.max(min, Math.min(14, this.view.s * f));
+    this.view.s = Math.max(this.minZoom(), Math.min(14, this.view.s * f));
     this.view.tx = sx - wx * this.view.s;
     this.view.ty = sy - wy * this.view.s;
   },
   tileAt(sx, sy) {
-    const [wx, wy] = this.toWorld(sx, sy);
+    let [wx, wy] = this.toWorld(sx, sy);
+    if (MAP_DATA.wrapX) wx = ((wx % this.ww) + this.ww) % this.ww;
     const gx = Math.floor(wx / this.gridSize), gy = Math.floor(wy / this.gridSize);
     if (gx < 0 || gy < 0 || gx >= this.gw || gy >= this.gh) return -1;
     for (const i of this.grid[gy * this.gw + gx]) {
@@ -181,7 +217,7 @@ const Render = {
     S.mapDirty = false;
     this.invalidate();
     const T = S.tiles, A = MAP.arcs, sides = MAP.arcSides;
-    const mk = () => new Path2D();
+    const mk = () => new ChunkedPath();
     const P = { prov: mk(), state: mk(), border: mk(), coast: mk(), front: mk() };
     for (let k = 0; k < A.length; k++) {
       const a = sides[2 * k], b = sides[2 * k + 1];
@@ -197,18 +233,14 @@ const Render = {
         else cat = null; // mare-mare: disegnato a parte, molto tenue
       } else if ((ta && ta.land) || (tb && tb.land)) cat = 'coast';
       if (!cat) continue;
-      const p = P[cat], arc = A[k];
-      p.moveTo(arc[0], arc[1]);
-      for (let j = 2; j < arc.length; j += 2) p.lineTo(arc[j], arc[j + 1]);
+      P[cat].line(A[k]);
     }
     if (!this.seaLines) {
       this.seaLines = mk();
       for (let k = 0; k < A.length; k++) {
         const a = sides[2 * k], b = sides[2 * k + 1];
         if (a < 0 || b < 0 || T[a].land || T[b].land) continue;
-        const arc = A[k];
-        this.seaLines.moveTo(arc[0], arc[1]);
-        for (let j = 2; j < arc.length; j += 2) this.seaLines.lineTo(arc[j], arc[j + 1]);
+        this.seaLines.line(A[k]);
       }
     }
     this.borders = P;
@@ -218,77 +250,93 @@ const Render = {
 
   // posizione e dimensione dei nomi dei paesi (sulla massa di territorio più grande)
   computeLabels() {
-    const T = S.tiles, seen = new Uint8Array(T.length), best = {};
+    // nome sulla massa che contiene la capitale (la madrepatria, non le colonie) e,
+    // più piccolo, sulle altre masse molto estese (imperi coloniali, come in HOI4)
+    const T = S.tiles, seen = new Uint8Array(T.length), comps = {};
     for (const t of T) {
       if (!t.land || seen[t.i]) continue;
       const comp = [], stack = [t.i];
       seen[t.i] = 1;
+      let area = 0, hasCap = false;
+      const cap = S.countries[t.ctrl] ? S.countries[t.ctrl].capital : -1;
       while (stack.length) {
         const u = stack.pop();
         comp.push(u);
+        area += T[u].area;
+        if (u === cap) hasCap = true;
         for (const v of T[u].nb) if (!seen[v] && T[v].land && T[v].ctrl === t.ctrl) { seen[v] = 1; stack.push(v); }
       }
-      let area = 0;
-      for (const u of comp) area += T[u].area;
-      if (!best[t.ctrl] || best[t.ctrl].area < area) best[t.ctrl] = { comp, area };
+      (comps[t.ctrl] = comps[t.ctrl] || []).push({ comp, area, hasCap });
     }
     this.labels = [];
-    for (const code in best) {
-      const { comp, area } = best[code];
-      let x = 0, y = 0;
-      for (const u of comp) { x += T[u].cx * T[u].area; y += T[u].cy * T[u].area; }
-      x /= area; y /= area;
-      // aggancia al centro della provincia più vicina della massa (per forme a C)
-      let bu = comp[0], bd = Infinity;
-      for (const u of comp) { const d = (T[u].cx - x) ** 2 + (T[u].cy - y) ** 2; if (d < bd) { bd = d; bu = u; } }
-      if (bd > 400) { x = T[bu].cx; y = T[bu].cy; }
-      const size = Math.max(7, Math.min(70, Math.sqrt(area / MAP_DATA.kmPerUnit ** 2) * 0.13));
-      this.labels.push({ code, x, y, size });
+    for (const code in comps) {
+      const list = comps[code];
+      const main = list.find(c => c.hasCap) || list.reduce((a, b) => a.area >= b.area ? a : b);
+      for (const c of list) if (c === main || c.area >= Math.max(400000, main.area)) this.labels.push(this.labelFor(code, c));
     }
+  },
+  labelFor(code, { comp, area }) {
+    const T = S.tiles;
+    let x = 0, y = 0;
+    for (const u of comp) { x += T[u].cx * T[u].area; y += T[u].cy * T[u].area; }
+    x /= area; y /= area;
+    // aggancia al centro della provincia più vicina della massa (per forme a C)
+    let bu = comp[0], bd = Infinity;
+    for (const u of comp) { const d = (T[u].cx - x) ** 2 + (T[u].cy - y) ** 2; if (d < bd) { bd = d; bu = u; } }
+    if (bd > 400) { x = T[bu].cx; y = T[bu].cy; }
+    const size = Math.max(7, Math.min(160, Math.sqrt(area / MAP_DATA.kmPerUnit ** 2) * 0.13));
+    return { code, x, y, size };
   },
 
   // livello mappa (terre, mari, confini, fiumi): ridisegnato solo se cambia vista o controllo
   drawLayer() {
     const ctx = this.lctx, v = this.view, dpr = this.dpr;
     // da lontano si usa un'immagine dell'intera mappa (molto più veloce durante lo scorrimento)
-    if (v.s * dpr <= 1.05) {
+    const WS = this.WORLD_SCALE;
+    const offs = this.copies(v, this.cw);
+    if (v.s * dpr <= WS * 1.05) {
       if (!this.world) {
         this.world = document.createElement('canvas');
-        this.world.width = Math.ceil(this.ww); this.world.height = Math.ceil(this.wh);
+        this.world.width = Math.ceil(this.ww * WS); this.world.height = Math.ceil(this.wh * WS);
         this.worldKey = '';
       }
       if (this.worldKey !== this.mapMode) {
-        this.drawMap(this.world.getContext('2d'), { s: 1, tx: 0, ty: 0 }, 1, this.world.width, this.world.height);
+        this.drawMap(this.world.getContext('2d'), { s: WS, tx: 0, ty: 0 }, 1, this.world.width, this.world.height);
         this.worldKey = this.mapMode;
       }
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = '#0b1622';
       ctx.fillRect(0, 0, this.layer.width, this.layer.height);
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-      ctx.setTransform(v.s * dpr, 0, 0, v.s * dpr, v.tx * dpr, v.ty * dpr);
-      ctx.drawImage(this.world, 0, 0);
+      for (const off of offs) {
+        ctx.setTransform(v.s * dpr, 0, 0, v.s * dpr, (v.tx + off * v.s) * dpr, v.ty * dpr);
+        ctx.drawImage(this.world, 0, 0, this.ww, this.wh);
+      }
       return;
     }
-    this.drawMap(ctx, v, dpr, this.layer.width, this.layer.height);
+    offs.forEach((off, k) => this.drawMap(ctx, { s: v.s, tx: v.tx + off * v.s, ty: v.ty }, dpr,
+      this.layer.width, this.layer.height, k > 0));
   },
+  WORLD_SCALE: 0.5,
 
-  drawMap(ctx, v, dpr, wpx, hpx) {
+  drawMap(ctx, v, dpr, wpx, hpx, keep) {
     const T = S.tiles;
-    const lw = 1 / v.s;
+    const lw = 1 / v.s, zs = v.s * MAP_DATA.kmPerUnit / 2; // zs: zoom in "pixel da 2 km"
+
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#0b1622';
-    ctx.fillRect(0, 0, wpx, hpx);
+    if (!keep) { ctx.fillStyle = '#0b1622'; ctx.fillRect(0, 0, wpx, hpx); }
     ctx.setTransform(v.s * dpr, 0, 0, v.s * dpr, v.tx * dpr, v.ty * dpr);
     // area della mappa (i "buchi" sono i laghi)
     ctx.fillStyle = '#3f6f8f';
     ctx.fillRect(0, 0, this.ww, this.wh);
     const vx0 = -v.tx / v.s, vy0 = -v.ty / v.s, vx1 = vx0 + wpx / dpr / v.s, vy1 = vy0 + hpx / dpr / v.s;
+    const vb = [vx0, vy0, vx1, vy1];
     const vis = i => { const b = this.bbox[i]; return b[2] >= vx0 && b[0] <= vx1 && b[3] >= vy0 && b[1] <= vy1; };
     // mare
     ctx.fillStyle = '#1d3d5c';
     for (const t of T) if (!t.land && vis(t.i)) ctx.fill(this.paths[t.i], 'evenodd');
     ctx.strokeStyle = 'rgba(160,200,235,0.10)'; ctx.lineWidth = lw;
-    if (v.s > 0.9) ctx.stroke(this.seaLines);
+    if (zs > 0.9) this.seaLines.stroke(ctx, vb);
     // terre
     for (const t of T) {
       if (!t.land || !vis(t.i)) continue;
@@ -315,28 +363,28 @@ const Render = {
       }
     }
     // fiumi
-    if (v.s > 0.45) {
+    if (zs > 0.45) {
       ctx.strokeStyle = 'rgba(70,130,185,0.85)'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       for (let w = 0; w < 3; w++) {
-        ctx.lineWidth = (0.6 + w * 0.5) * lw * Math.min(2, Math.max(1, v.s / 1.5));
-        ctx.stroke(this.rivers[w]);
+        ctx.lineWidth = (0.6 + w * 0.5) * lw * Math.min(2, Math.max(1, zs / 1.5));
+        this.rivers[w].stroke(ctx, vb);
       }
     }
     // confini
     const B = this.borders;
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    if (v.s > 1.1) { ctx.strokeStyle = 'rgba(0,0,0,0.16)'; ctx.lineWidth = 0.7 * lw; ctx.stroke(B.prov); }
-    if (v.s > 0.55) { ctx.strokeStyle = 'rgba(0,0,0,0.38)'; ctx.lineWidth = 1 * lw; ctx.stroke(B.state); }
-    ctx.strokeStyle = 'rgba(10,20,30,0.75)'; ctx.lineWidth = 1 * lw; ctx.stroke(B.coast);
-    ctx.strokeStyle = 'rgba(12,12,16,0.9)'; ctx.lineWidth = 1.6 * lw; ctx.stroke(B.border);
-    ctx.strokeStyle = '#ff3b30'; ctx.lineWidth = 2.4 * lw; ctx.stroke(B.front);
+    if (zs > 1.1) { ctx.strokeStyle = 'rgba(0,0,0,0.16)'; ctx.lineWidth = 0.7 * lw; B.prov.stroke(ctx, vb); }
+    if (zs > 0.55) { ctx.strokeStyle = 'rgba(0,0,0,0.38)'; ctx.lineWidth = 1 * lw; B.state.stroke(ctx, vb); }
+    ctx.strokeStyle = 'rgba(10,20,30,0.75)'; ctx.lineWidth = 1 * lw; B.coast.stroke(ctx, vb);
+    ctx.strokeStyle = 'rgba(12,12,16,0.9)'; ctx.lineWidth = 1.6 * lw; B.border.stroke(ctx, vb);
+    ctx.strokeStyle = '#ff3b30'; ctx.lineWidth = 2.4 * lw; B.front.stroke(ctx, vb);
     // ferrovie
-    if (this.mapMode === 'railway' || this.mapMode === 'infra' || v.s > 3) {
+    if (this.mapMode === 'railway' || this.mapMode === 'infra' || zs > 3) {
       const strong = this.mapMode === 'railway' || this.mapMode === 'infra';
       for (let l = 0; l < 5; l++) {
         ctx.strokeStyle = strong ? `hsl(${50 - l * 12},90%,${55 + l * 5}%)` : 'rgba(40,30,20,0.55)';
         ctx.lineWidth = (strong ? 1 + l * 0.6 : 0.6 + l * 0.25) * lw;
-        ctx.stroke(this.rails[l]);
+        this.rails[l].stroke(ctx, vb);
       }
     }
     // nomi dei paesi
@@ -357,14 +405,30 @@ const Render = {
 
   draw(sel) {
     if (S.mapDirty) this.rebuildStyles();
-    const v = this.view, dpr = this.dpr, ctx = this.ctx, T = S.tiles;
+    this.clampView();
+    const v = this.view, dpr = this.dpr, ctx = this.ctx;
     const key = `${v.s},${v.tx},${v.ty},${this.cv.width},${this.cv.height},${this.mapMode}`;
     if (key !== this.layerKey) { this.drawLayer(); this.layerKey = key; }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(this.layer, 0, 0);
+    for (const off of this.copies(v, this.cw)) this.drawDynamic(sel, { s: v.s, tx: v.tx + off * v.s, ty: v.ty });
+    // riquadro di selezione
+    if (this.box) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const { x0, y0, x1, y1 } = this.box;
+      ctx.fillStyle = 'rgba(255,225,77,0.1)'; ctx.strokeStyle = '#ffe14d'; ctx.lineWidth = 1;
+      ctx.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
+      ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
+    }
+  },
+
+  // tutto ciò che cambia a ogni fotogramma, per una copia della mappa (v = vista spostata)
+  drawDynamic(sel, v) {
+    const dpr = this.dpr, ctx = this.ctx, T = S.tiles;
     ctx.setTransform(v.s * dpr, 0, 0, v.s * dpr, v.tx * dpr, v.ty * dpr);
-    const lw = 1 / v.s;
-    const [vx0, vy0] = this.toWorld(-40, -40), [vx1, vy1] = this.toWorld(this.cw + 40, this.ch + 40);
+    const lw = 1 / v.s, zs = v.s * MAP_DATA.kmPerUnit / 2;
+    const vx0 = (-40 - v.tx) / v.s, vy0 = (-40 - v.ty) / v.s;
+    const vx1 = (this.cw + 40 - v.tx) / v.s, vy1 = (this.ch + 40 - v.ty) / v.s;
     const inView = t => t.cx >= vx0 && t.cx <= vx1 && t.cy >= vy0 && t.cy <= vy1;
 
     if (this.hover >= 0) {
@@ -379,8 +443,8 @@ const Render = {
     for (const t of T) {
       if (!t.land || !inView(t)) continue;
       const big = caps.has(t.i);
-      if (!t.vp || (!big && t.vp < (v.s > 2 ? 1 : v.s > 1 ? 5 : 10))) continue;
-      const r = (big ? 5 : t.vp >= 10 ? 3 : 2.2) * lw * Math.min(1.6, Math.max(0.8, v.s / 2));
+      if (!t.vp || (!big && t.vp < (zs > 2 ? 1 : zs > 1 ? 5 : 10))) continue;
+      const r = (big ? 5 : t.vp >= 10 ? 3 : 2.2) * lw * Math.min(1.6, Math.max(0.8, zs / 2));
       if (big) {
         ctx.fillStyle = '#ffd34d'; ctx.strokeStyle = '#2a1f00'; ctx.lineWidth = 0.8 * lw;
         ctx.beginPath();
@@ -393,7 +457,7 @@ const Render = {
         ctx.fillStyle = '#f2f2f2'; ctx.strokeStyle = '#111'; ctx.lineWidth = 0.8 * lw;
         ctx.fillRect(t.cx - r, t.cy - r, 2 * r, 2 * r); ctx.strokeRect(t.cx - r, t.cy - r, 2 * r, 2 * r);
       }
-      if (t.city && (v.s > 2.2 || (big && v.s > 1.2) || (t.vp >= 10 && v.s > 1.6))) {
+      if (t.city && (zs > 2.2 || (big && zs > 1.2) || (t.vp >= 10 && zs > 1.6))) {
         const fs = 10.5 * lw;
         ctx.font = `600 ${fs}px Inter, Arial, sans-serif`;
         ctx.textAlign = 'center';
@@ -402,7 +466,7 @@ const Render = {
         ctx.fillStyle = '#fff'; ctx.fillText(t.city, t.cx, t.cy - r - 7 * lw);
       }
     }
-    if (v.s > 1.6) {
+    if (zs > 1.6) {
       ctx.fillStyle = '#9fd0ff'; ctx.strokeStyle = '#0b2033'; ctx.lineWidth = 0.8 * lw;
       for (const t of T) {
         if (!t.port || t.port < 3 || !inView(t)) continue;
@@ -449,22 +513,13 @@ const Render = {
     }
     ctx.setLineDash([]);
 
-    this.drawCounters(ctx, sel, inView, lw);
-
-    // riquadro di selezione
-    if (this.box) {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const { x0, y0, x1, y1 } = this.box;
-      ctx.fillStyle = 'rgba(255,225,77,0.1)'; ctx.strokeStyle = '#ffe14d'; ctx.lineWidth = 1;
-      ctx.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
-      ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
-    }
+    this.drawCounters(ctx, sel, inView, lw, v);
   },
 
   // segnalini delle divisioni: dimensione fissa sullo schermo (come in HOI4)
-  drawCounters(ctx, sel, inView, lw) {
+  drawCounters(ctx, sel, inView, lw, v = this.view) {
     const T = S.tiles;
-    const k0 = Math.max(0.55, Math.min(1.15, this.view.s / 1.6));
+    const k0 = Math.max(0.55, Math.min(1.15, v.s * MAP_DATA.kmPerUnit / 2 / 1.6));
     const cw = 26 * k0 * lw, chh = 17 * k0 * lw;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = `700 ${12 * k0 * lw}px Inter, Arial, sans-serif`;

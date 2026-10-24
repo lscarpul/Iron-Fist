@@ -220,3 +220,263 @@ GERMAN_EAST = {
 FINNISH_EAST = {'Repubblica di Carelia': 'Carelia orientale', 'Leningrado': 'Istmo di Carelia',
                 "Oblast' di Leningrado": 'Istmo di Carelia', 'Murmansk': 'Petsamo',
                 "Oblast' di Murmansk": 'Petsamo'}
+
+# ======================================================================================
+# Mondo intero (aggiunto quando la mappa e' stata estesa al pianeta)
+# ======================================================================================
+WORLD_COUNTRIES = {
+    'USA': ('Stati Uniti', (-77.04, 38.90)), 'JAP': ('Giappone', (139.69, 35.69)),
+    'CHI': ('Cina', (118.80, 32.06)), 'PRC': ('Cina comunista', (109.49, 36.59)),
+    'MAN': ('Manciukuò', (125.32, 43.82)), 'MEN': ('Mengjiang', (114.88, 40.77)),
+    'SHX': ('Shanxi', (112.55, 37.87)), 'GXC': ('Guangxi', (110.30, 25.27)),
+    'YUN': ('Yunnan', (102.71, 25.04)), 'XSM': ('Xibei San Ma', (103.83, 36.06)),
+    'SIK': ('Sinkiang', (87.62, 43.83)), 'TIB': ('Tibet', (91.11, 29.65)),
+    'MON': ('Mongolia', (106.91, 47.89)), 'TAN': ('Tannu Tuva', (94.45, 51.72)),
+    'RAJ': ('Raj britannico', (77.21, 28.61)), 'NEP': ('Nepal', (85.32, 27.71)),
+    'BHU': ('Bhutan', (89.64, 27.47)), 'AFG': ('Afghanistan', (69.17, 34.53)),
+    'SIA': ('Siam', (100.50, 13.76)), 'PHI': ('Filippine', (120.98, 14.60)),
+    'CAN': ('Canada', (-75.70, 45.42)), 'AST': ('Australia', (149.13, -35.28)),
+    'NZL': ('Nuova Zelanda', (174.78, -41.29)), 'SAF': ('Sudafrica', (28.19, -25.75)),
+    'MEX': ('Messico', (-99.13, 19.43)), 'GUA': ('Guatemala', (-90.51, 14.64)),
+    'HON': ('Honduras', (-87.21, 14.07)), 'ELS': ('El Salvador', (-89.19, 13.69)),
+    'NIC': ('Nicaragua', (-86.25, 12.13)), 'COS': ('Costa Rica', (-84.09, 9.93)),
+    'PAN': ('Panama', (-79.52, 8.98)), 'CUB': ('Cuba', (-82.37, 23.11)),
+    'HAI': ('Haiti', (-72.34, 18.54)), 'DOM': ('Repubblica Dominicana', (-69.93, 18.47)),
+    'COL': ('Colombia', (-74.07, 4.71)), 'VEN': ('Venezuela', (-66.90, 10.48)),
+    'ECU': ('Ecuador', (-78.47, -0.18)), 'PRU': ('Perù', (-77.04, -12.05)),
+    'BOL': ('Bolivia', (-68.15, -16.50)), 'CHL': ('Cile', (-70.65, -33.45)),
+    'ARG': ('Argentina', (-58.38, -34.60)), 'PAR': ('Paraguay', (-57.58, -25.26)),
+    'URU': ('Uruguay', (-56.16, -34.90)), 'BRA': ('Brasile', (-43.21, -22.91)),
+    'ETH': ('Etiopia', (38.75, 9.03)), 'LIB': ('Liberia', (-10.80, 6.30)),
+    'YEM': ('Yemen', (44.21, 15.35)), 'OMA': ('Oman', (58.59, 23.61)),
+}
+for _k, (_n, _c) in WORLD_COUNTRIES.items():
+    COUNTRIES[_k] = (_n, _c, 'M')
+CAPITAL_CITY.update({'CHI': 'Nanchino', 'PRC': "Yan'an", 'MAN': 'Hsinking', 'MEN': 'Kalgan',
+                     'RAJ': 'Nuova Delhi', 'AST': 'Canberra', 'SAF': 'Pretoria', 'TAN': 'Kyzyl'})
+
+DIRECT_ADM0.update({
+    # Americhe
+    'USA': 'USA', 'PRI': 'USA', 'VIR': 'USA', 'GUM': 'USA', 'ASM': 'USA', 'UMI': 'USA',
+    'CAN': 'CAN', 'SPM': 'F', 'MEX': 'MEX', 'GTM': 'GUA', 'HND': 'HON', 'SLV': 'ELS', 'NIC': 'NIC',
+    'CRI': 'COS', 'PAN': 'PAN', 'CUB': 'CUB', 'HTI': 'HAI', 'DOM': 'DOM', 'COL': 'COL', 'VEN': 'VEN',
+    'ECU': 'ECU', 'PER': 'PRU', 'BOL': 'BOL', 'CHL': 'CHL', 'ARG': 'ARG', 'PRY': 'PAR', 'URY': 'URU',
+    'BRA': 'BRA', 'GUY': 'U', 'SUR': 'HOL', 'BLZ': 'U', 'JAM': 'U', 'BHS': 'U', 'BRB': 'U',
+    'TTO': 'U', 'GRD': 'U', 'LCA': 'U', 'VCT': 'U', 'DMA': 'U', 'ATG': 'U', 'KNA': 'U', 'MSR': 'U',
+    'AIA': 'U', 'VGB': 'U', 'CYM': 'U', 'TCA': 'U', 'BMU': 'U', 'FLK': 'U', 'SGS': 'U',
+    'ABW': 'HOL', 'CUW': 'HOL', 'SXM': 'HOL', 'BLM': 'F', 'MAF': 'F', 'CLP': 'F',
+    # Africa
+    'ETH': 'ETH', 'ERI': 'I', 'SOM': 'I', 'SOL': 'U', 'DJI': 'F', 'SDN': 'U', 'SDS': 'U',
+    'KEN': 'U', 'UGA': 'U', 'TZA': 'U', 'RWA': 'B', 'BDI': 'B', 'COD': 'B', 'AGO': 'O', 'MOZ': 'O',
+    'GNB': 'O', 'CPV': 'O', 'STP': 'O', 'ZAF': 'SAF', 'NAM': 'SAF', 'ZWE': 'U', 'ZMB': 'U',
+    'MWI': 'U', 'BWA': 'U', 'LSO': 'U', 'SWZ': 'U', 'SEN': 'F', 'MLI': 'F', 'GIN': 'F', 'CIV': 'F',
+    'BFA': 'F', 'NER': 'F', 'BEN': 'F', 'TCD': 'F', 'CAF': 'F', 'COG': 'F', 'GAB': 'F', 'CMR': 'F',
+    'TGO': 'F', 'MDG': 'F', 'COM': 'F', 'NGA': 'U', 'GHA': 'U', 'SLE': 'U', 'GMB': 'U', 'LBR': 'LIB',
+    'GNQ': 'E', 'MUS': 'U', 'SYC': 'U', 'SHN': 'U', 'IOT': 'U', 'ATF': 'F',
+    # Asia
+    'JPN': 'JAP', 'KOR': 'JAP', 'PRK': 'JAP', 'TWN': 'JAP', 'MNG': 'MON', 'IND': 'RAJ', 'BGD': 'RAJ',
+    'PAK': 'RAJ', 'MMR': 'RAJ', 'LKA': 'U', 'MDV': 'U', 'NPL': 'NEP', 'BTN': 'BHU', 'AFG': 'AFG',
+    'THA': 'SIA', 'VNM': 'F', 'LAO': 'F', 'KHM': 'F', 'MYS': 'U', 'SGP': 'U', 'BRN': 'U',
+    'IDN': 'HOL', 'TLS': 'O', 'PHL': 'PHI', 'HKG': 'U', 'MAC': 'O', 'KGZ': 'S', 'TJK': 'S',
+    'KAZ': 'S', 'TKM': 'S', 'UZB': 'S', 'YEM': 'YEM', 'OMN': 'OMA', 'ARE': 'U', 'QAT': 'U',
+    'BHR': 'U', 'KAS': 'RAJ', 'KAB': 'AFG', 'PGA': 'CHI',
+    # Oceania
+    'AUS': 'AST', 'NFK': 'AST', 'PNG': 'AST', 'NZL': 'NZL', 'COK': 'NZL', 'NIU': 'NZL', 'WSM': 'NZL',
+    'FJI': 'U', 'SLB': 'U', 'KIR': 'U', 'TUV': 'U', 'TON': 'U', 'NRU': 'AST', 'PCN': 'U',
+    'VUT': 'F', 'NCL': 'F', 'PYF': 'F', 'WLF': 'F', 'PLW': 'JAP', 'FSM': 'JAP', 'MHL': 'JAP',
+    'MNP': 'JAP', 'IOA': 'AST', 'HMD': 'AST', 'CSI': 'AST', 'ATC': 'AST', 'USG': 'USA', 'ATA': 'U',
+    'GRL': 'D',
+})
+# l'Afghanistan torna un paese a se'
+DIRECT_ADM0['AFG'] = 'AFG'
+DIRECT_ADM0['PAK'] = 'RAJ'
+HIST_NAME['Afghanistan'] = 'AFG'
+
+# Cina 1936: governo nazionalista, signori della guerra, comunisti e stati fantoccio giapponesi
+CHN_PROVINCES = {
+    'Heilongjiang': 'MAN', 'Jilin': 'MAN', 'Liaoning': 'MAN', 'Inner Mongol': 'MEN',
+    'Shanxi': 'SHX', 'Guangxi': 'GXC', 'Yunnan': 'YUN', 'Gansu': 'XSM', 'Qinghai': 'XSM',
+    'Ningxia': 'XSM', 'Xinjiang': 'SIK', 'Xizang': 'TIB',
+}
+RUS_PROVINCES = {'Tuva': 'TAN'}
+
+# Correzioni poligonali con filtro sul paese moderno: (codice, poligono, adm0 ammessi)
+POLY_OVERRIDE_ADM0 = [
+    ('MAN', [(116.5, 41.0), (127, 41.0), (127, 53.6), (116.5, 53.6)], {'CHN'}),   # Mongolia interna orientale e Rehe
+    ('MAN', [(115.8, 40.4), (120.5, 40.4), (120.5, 42.6), (115.8, 42.6)], {'CHN'}),  # Rehe (Chengde)
+    ('XSM', [(96, 37.0), (106.2, 37.0), (106.2, 43.0), (96, 43.0)], {'CHN'}),      # Alxa
+    ('PRC', [(107.3, 35.9), (110.6, 35.9), (110.6, 38.2), (107.3, 38.2)], {'CHN'}),  # Shaanxi settentrionale (Yan'an)
+    ('JAP', [(141.5, 45.9), (144.8, 45.9), (144.8, 50.0), (141.5, 50.0)], {'RUS'}),  # Karafuto
+    ('JAP', [(145.3, 43.2), (157.0, 50.9), (156.0, 51.2), (145.0, 44.0)], {'RUS'}),  # Curili
+    ('U', [(113.8, 22.15), (114.45, 22.15), (114.45, 22.56), (113.8, 22.56)], {'CHN', 'HKG'}),  # Hong Kong
+    ('E', [(-10.2, 29.1), (-9.6, 29.1), (-9.6, 29.6), (-10.2, 29.6)], {'MAR'}),   # Ifni
+    ('E', [(-13.2, 27.6), (-8.7, 27.6), (-8.7, 28.6), (-13.2, 28.6)], {'MAR'}),   # Capo Juby
+    ('U', [(43.0, 12.3), (54.0, 12.3), (54.0, 19.0), (46.5, 19.0), (45.0, 13.6), (43.4, 13.0)], {'YEM'}),  # Aden
+]
+
+
+def density_class(code, adm0, lon, lat):
+    """Classe di densita' delle province: piu' fitte dove HOI4 ha piu' province."""
+    if -30 <= lon <= 60 and lat >= 27 and code in ('G', 'F', 'U', 'I', 'S', 'P', 'E', 'O', 'B', 'HOL',
+            'LUX', 'D', 'N', 'W', 'K', 'EST', 'LAT', 'LIT', 'C', 'A', 'Z', 'H', 'R', 'Y', 'L', 'Q',
+            'T', 'ALB', 'IRE', 'ICE', 'EGY', 'IRQ', 'PER', 'SAU'):
+        if adm0 in COLONY_ADM0 or adm0 in ('EGY', 'IRQ', 'IRN', 'SAU', 'JOR', 'ISR', 'PSX', 'KWT'):
+            return 'D'
+        if adm0 == 'GRL':
+            return 'X'
+        return COUNTRIES[code][2]
+    if code == 'S':
+        return 'X' if lat > 54 or lon > 85 else 'L'
+    if adm0 in ('JPN', 'KOR', 'PRK', 'TWN'):
+        return 'J'
+    if adm0 == 'CHN':
+        if lon >= 103 and lat <= 41:
+            return 'A'
+        return 'M' if lon >= 118 else 'X'
+    if adm0 in ('IND', 'BGD', 'LKA'):
+        return 'A'
+    if adm0 in ('PAK',):
+        return 'M' if lon > 70 and lat > 29 else 'L'
+    if adm0 in ('MMR', 'THA', 'VNM', 'LAO', 'KHM', 'MYS', 'SGP', 'IDN', 'PHL', 'BRN', 'TLS', 'NPL', 'BTN',
+                'HKG', 'MAC'):
+        return 'M'
+    if adm0 == 'USA':
+        if lat > 50 or lon < -165:
+            return 'X'
+        return 'M' if lon > -103 or lon < -150 else 'L'
+    if adm0 == 'CAN':
+        return 'M' if lat < 50 and lon > -100 else 'L' if lat < 56 else 'X'
+    if adm0 in ('MEX', 'GTM', 'HND', 'SLV', 'NIC', 'CRI', 'PAN', 'CUB', 'HTI', 'DOM', 'JAM', 'PRI', 'NZL',
+                'ZAF', 'TTO', 'BHS'):
+        return 'M'
+    if adm0 in ('BRA', 'COL', 'VEN', 'PER', 'BOL', 'ECU', 'GUY', 'SUR'):
+        if lon < -52 and lat > -16 and adm0 != 'VEN' and lat < 4 and not (adm0 == 'COL' and lon > -76):
+            return 'X'  # Amazzonia
+        return 'L'
+    if adm0 in ('ARG', 'CHL'):
+        return 'L' if lat > -42 else 'X'
+    if adm0 in ('PRY', 'URY'):
+        return 'L'
+    if adm0 == 'AUS':
+        return 'L' if (lon > 141 and lat < -26) or (lon < 120 and lat < -30) else 'X'
+    if adm0 in ('MNG', 'GRL', 'ATA'):
+        return 'X'
+    if lat > 60:
+        return 'X'
+    # Africa e Arabia
+    if 15 <= lat <= 30 and -18 <= lon <= 60:
+        return 'X'
+    if lat < -17 and lon < 24 and adm0 in ('NAM', 'BWA', 'AGO'):
+        return 'X'
+    return 'L'
+
+
+STATE_KM2.update({'J': 15000, 'A': 40000, 'M': 60000, 'L': 100000, 'X': 280000})
+PROV_KM2.update({'J': 3500, 'A': 7000, 'M': 10500, 'L': 16000, 'X': 45000})
+
+POP_1936.update({
+    'USA': 128.0, 'JAP': 97.0, 'CHI': 360.0, 'PRC': 1.5, 'MAN': 34.0, 'MEN': 5.0, 'SHX': 12.0,
+    'GXC': 13.0, 'YUN': 12.0, 'XSM': 9.0, 'SIK': 4.0, 'TIB': 1.2, 'MON': 0.75, 'TAN': 0.07,
+    'RAJ': 330.0, 'NEP': 5.5, 'BHU': 0.3, 'AFG': 7.0, 'SIA': 14.5, 'PHI': 15.5, 'CAN': 11.0,
+    'AST': 6.8, 'NZL': 1.6, 'SAF': 10.0, 'MEX': 18.5, 'GUA': 2.1, 'HON': 1.0, 'ELS': 1.6, 'NIC': 0.8,
+    'COS': 0.6, 'PAN': 0.5, 'CUB': 4.2, 'HAI': 2.8, 'DOM': 1.5, 'COL': 8.7, 'VEN': 3.4, 'ECU': 2.6,
+    'PRU': 6.5, 'BOL': 3.0, 'CHL': 4.6, 'ARG': 12.8, 'PAR': 1.0, 'URU': 2.0, 'BRA': 39.0,
+    'ETH': 10.0, 'LIB': 1.0, 'YEM': 3.5, 'OMA': 0.5, 'SAU': 3.0,
+})
+# popolazioni delle colonie fuori dall'Europa (milioni)
+POP_COLONY.update({
+    'KOR': 22.0, 'PRK': 0.0, 'TWN': 5.3, 'VNM': 18.0, 'LAO': 1.0, 'KHM': 3.0, 'IDN': 66.0, 'MYS': 4.5,
+    'SGP': 0.6, 'LKA': 5.6, 'NGA': 20.0, 'GHA': 3.5, 'COD': 10.0, 'AGO': 3.5, 'MOZ': 4.0, 'KEN': 3.5,
+    'TZA': 5.0, 'UGA': 3.5, 'SDN': 6.0, 'SDS': 0.0, 'MDG': 3.8, 'SEN': 1.6, 'MLI': 3.0, 'GIN': 2.0,
+    'CIV': 4.0, 'BFA': 3.0, 'NER': 2.0, 'TCD': 1.5, 'CMR': 2.5, 'ZWE': 1.4, 'ZMB': 1.4, 'MWI': 1.6,
+    'ERI': 0.6, 'SOM': 1.0, 'GUY': 0.33, 'SUR': 0.17, 'JAM': 1.1, 'PRI': 1.7, 'NAM': 0.36,
+})
+DEV.update({
+    'USA': 1.0, 'CAN': 0.85, 'AST': 0.8, 'NZL': 0.8, 'JAP': 0.65, 'SAF': 0.5, 'ARG': 0.5, 'URU': 0.45,
+    'CHL': 0.4, 'MEX': 0.3, 'BRA': 0.3, 'CUB': 0.35, 'MAN': 0.35, 'CHI': 0.2, 'RAJ': 0.2, 'PHI': 0.2,
+    'SIA': 0.15, 'COL': 0.25, 'VEN': 0.3, 'PRU': 0.2, 'ECU': 0.15, 'BOL': 0.12, 'PAR': 0.12,
+})
+NAVAL_BASES += [
+    (-157.95, 21.35, 10, 'Pearl Harbor'), (-122.3, 37.8, 8, 'San Francisco'), (-117.2, 32.7, 10, 'San Diego'),
+    (-76.3, 36.95, 10, 'Norfolk'), (-74.0, 40.7, 6, 'New York'), (-122.6, 47.55, 6, 'Bremerton'),
+    (132.55, 34.24, 10, 'Kure'), (139.67, 35.29, 10, 'Yokosuka'), (129.73, 33.16, 8, 'Sasebo'),
+    (135.38, 35.47, 6, 'Maizuru'), (103.82, 1.29, 10, 'Singapore'), (114.17, 22.3, 6, 'Hong Kong'),
+    (120.95, 14.5, 4, 'Cavite'), (151.2, -33.86, 8, 'Sydney'), (115.75, -32.05, 4, 'Fremantle'),
+    (174.8, -36.8, 4, 'Auckland'), (18.43, -34.19, 6, 'Simonstown'), (72.83, 18.95, 6, 'Bombay'),
+    (80.28, 13.08, 3, 'Madras'), (-63.6, 44.65, 6, 'Halifax'), (131.9, 43.1, 8, 'Vladivostok'),
+    (121.6, 38.9, 6, 'Port Arthur'), (121.5, 31.2, 4, 'Shanghai'), (106.9, -6.1, 6, 'Batavia'),
+    (112.7, -7.2, 6, 'Surabaya'), (106.7, 10.8, 4, 'Saigon'), (44.99, 12.79, 6, 'Aden'),
+    (-79.9, 9.35, 6, 'Colón'), (-43.2, -22.9, 4, 'Rio de Janeiro'), (-58.37, -34.6, 4, 'Buenos Aires'),
+    (-71.6, -33.0, 4, 'Valparaíso'), (39.67, -4.05, 3, 'Mombasa'), (-17.4, 14.7, 4, 'Dakar'),
+    (55.3, 25.3, 2, 'Dubai'), (50.6, 26.2, 3, 'Bahrein'), (144.75, 13.45, 2, 'Guam'), (134.5, 7.3, 3, 'Palau'),
+    (151.85, 7.45, 6, 'Truk'), (152.2, -4.2, 2, 'Rabaul'),
+]
+RESOURCES += [
+    (-97.5, 32.0, 'oil', 80), (-98.5, 35.5, 'oil', 40), (-118.2, 34.0, 'oil', 30), (-91.5, 30.5, 'oil', 20),
+    (-80.0, 41.5, 'oil', 6), (-66.5, 10.0, 'oil', 40), (-71.6, 10.6, 'oil', 30), (-97.9, 21.0, 'oil', 12),
+    (-63.5, -22.0, 'oil', 3), (-81.3, -4.5, 'oil', 3), (-61.5, 10.3, 'oil', 6),
+    (101.5, 2.5, 'rubber', 40), (103.5, 1.8, 'rubber', 30), (100.5, 5.5, 'rubber', 20), (106.0, -6.5, 'rubber', 25),
+    (99.0, 3.0, 'rubber', 30), (110.0, -7.0, 'rubber', 10), (106.0, 11.5, 'rubber', 15), (80.5, 7.0, 'rubber', 10),
+    (-60.0, -3.0, 'rubber', 4), (-9.5, 6.5, 'rubber', 6), (100.0, 7.5, 'rubber', 10),
+    (117.0, 0.5, 'oil', 15), (103.0, -3.0, 'oil', 20), (101.0, 1.0, 'oil', 10), (114.5, 4.5, 'oil', 10),
+    (95.0, 20.5, 'oil', 6), (94.5, 26.8, 'oil', 3), (51.5, 26.0, 'oil', 2),
+    (-92.5, 47.5, 'steel', 80), (-87.6, 46.4, 'steel', 30), (-86.8, 33.5, 'steel', 20), (-66.8, 52.9, 'steel', 6),
+    (-43.9, -20.0, 'steel', 20), (85.5, 22.0, 'steel', 30), (113.5, 30.2, 'steel', 12), (123.0, 41.0, 'steel', 30),
+    (114.5, 36.5, 'steel', 12), (115.0, -24.0, 'steel', 10), (137.5, -33.0, 'steel', 12), (-70.6, -27.0, 'steel', 8),
+    (127.6, 40.0, 'steel', 8), (141.0, 42.5, 'steel', 4),
+    (-55.0, 5.0, 'aluminium', 20), (-58.3, 6.0, 'aluminium', 25), (-92.6, 34.5, 'aluminium', 12),
+    (110.5, -1.5, 'aluminium', 12), (104.5, 0.9, 'aluminium', 10), (-13.5, 10.5, 'aluminium', 8),
+    (-79.0, 50.5, 'aluminium', 10), (150.0, -24.0, 'aluminium', 2),
+    (114.0, 25.5, 'tungsten', 60), (115.5, 24.8, 'tungsten', 20), (98.5, 16.5, 'tungsten', 16),
+    (98.0, 13.0, 'tungsten', 8), (126.5, 36.5, 'tungsten', 10), (-66.0, -19.5, 'tungsten', 10),
+    (-118.0, 37.5, 'tungsten', 8), (-108.5, 44.5, 'tungsten', 2),
+    (166.5, -21.5, 'chromium', 12), (30.0, -19.5, 'chromium', 20), (29.8, -25.5, 'chromium', 20),
+    (120.0, 16.0, 'chromium', 10), (85.5, 21.0, 'chromium', 8), (57.0, 50.5, 'chromium', 6),
+    (-77.0, 21.5, 'chromium', 6), (-110.0, 45.0, 'chromium', 2),
+    (-80.5, -3.6, 'aluminium', 2), (-46.5, -1.5, 'rubber', 2),
+]
+STRAITS += [
+    ((-122.4, 37.8), (-122.47, 37.85), 'Golden Gate'), ((130.9, 33.95), (130.95, 33.88), 'Kanmon'),
+    ((140.7, 41.6), (140.7, 41.15), 'Stretto di Tsugaru'), ((103.85, 1.35), (103.75, 1.5), 'Stretto di Johor'),
+    ((-74.4, 40.6), (-74.05, 40.6), 'Narrows'), ((133.2, 34.4), (133.4, 34.2), 'Seto'),
+    ((-75.0, 45.4), (-74.9, 45.6), 'San Lorenzo'), ((-70.8, -53.2), (-70.4, -52.8), 'Stretto di Magellano'),
+    ((43.4, 12.7), (43.3, 12.4), 'Bab el-Mandeb'), ((32.3, 30.6), (32.35, 30.65), 'Canale di Suez'),
+    ((-79.6, 9.1), (-79.7, 9.2), 'Canale di Panama'),
+]
+# canali e stretti da tenere navigabili
+SEA_CHANNELS += [
+    [(32.30, 31.25), (32.33, 30.60), (32.55, 30.25), (32.55, 29.95)],   # Suez
+    [(-79.92, 9.35), (-79.70, 9.10), (-79.55, 8.95)],                    # Panama
+    [(130.88, 33.97), (130.95, 33.93)],                                  # Kanmon
+]
+SEA_NAMES.update({
+    'North Pacific Ocean': 'Oceano Pacifico', 'South Pacific Ocean': 'Pacifico meridionale',
+    'South Atlantic Ocean': 'Atlantico meridionale', 'Indian Ocean': 'Oceano Indiano',
+    'Arctic Ocean': 'Mar Glaciale Artico', 'Southern Ocean': 'Oceano Antartico',
+    'Caribbean Sea': 'Mar dei Caraibi', 'Gulf of Mexico': 'Golfo del Messico', 'Bering Sea': 'Mare di Bering',
+    'Sea of Okhotsk': 'Mare di Ochotsk', 'Sea of Japan': 'Mar del Giappone', 'East China Sea': 'Mar Cinese Orientale',
+    'South China Sea': 'Mar Cinese Meridionale', 'Yellow Sea': 'Mar Giallo', 'Philippine Sea': 'Mar delle Filippine',
+    'Coral Sea': 'Mar dei Coralli', 'Tasman Sea': 'Mar di Tasmania', 'Arabian Sea': 'Mar Arabico',
+    'Bay of Bengal': 'Golfo del Bengala', 'Andaman Sea': 'Mare delle Andamane', 'Java Sea': 'Mar di Giava',
+    'Banda Sea': 'Mar di Banda', 'Celebes Sea': 'Mar di Celebes', 'Sulu Sea': 'Mar di Sulu',
+    'Timor Sea': 'Mar di Timor', 'Arafura Sea': 'Mar degli Arafura', 'Gulf of Aden': 'Golfo di Aden',
+    'Hudson Bay': 'Baia di Hudson', 'Labrador Sea': 'Mare del Labrador', 'Baffin Bay': 'Baia di Baffin',
+    'Gulf of Alaska': 'Golfo dell\'Alaska', 'Gulf of Guinea': 'Golfo di Guinea', 'Mozambique Channel': 'Canale di Mozambico',
+    'Gulf of Thailand': 'Golfo del Siam', 'Bo Hai': 'Golfo di Bohai', 'Gulf of California': 'Golfo di California',
+    'Laptev Sea': 'Mare di Laptev', 'East Siberian Sea': 'Mare della Siberia Orientale', 'Chukchi Sea': 'Mare dei Ciukci',
+    'Beaufort Sea': 'Mare di Beaufort', 'Gulf of St. Lawrence': 'Golfo di San Lorenzo', 'Gulf of Oman': 'Golfo di Oman',
+    'Molucca Sea': 'Mare delle Molucche', 'Bismarck Sea': 'Mare di Bismarck', 'Solomon Sea': 'Mare delle Salomone',
+    'Great Australian Bight': 'Grande Baia Australiana', 'Gulf of Carpentaria': 'Golfo di Carpentaria',
+    'Strait of Malacca': 'Stretto di Malacca', 'Makassar Strait': 'Stretto di Makassar', 'Flores Sea': 'Mar di Flores',
+    'Rio de la Plata': 'Rio de la Plata', 'Gulf of Panama': 'Golfo di Panama', 'Sargasso Sea': 'Mar dei Sargassi',
+    'Davis Strait': 'Stretto di Davis', 'Gulf of Tonkin': 'Golfo del Tonchino', 'Korea Strait': 'Stretto di Corea',
+    'Taiwan Strait': 'Stretto di Formosa', 'Ross Sea': 'Mare di Ross', 'Weddell Sea': 'Mare di Weddell',
+    'Scotia Sea': 'Mare di Scotia', 'Bass Strait': 'Stretto di Bass', 'Persian Gulf': 'Golfo Persico',
+    'Red Sea': 'Mar Rosso', 'Caspian Sea': 'Mar Caspio',
+})
+SEA_ENCLOSED |= {'Mar dei Caraibi', 'Golfo del Messico', 'Mar del Giappone', 'Mar Cinese Orientale',
+                 'Mar Giallo', 'Mar di Giava', 'Golfo del Siam', 'Golfo di Bohai', 'Stretto di Malacca',
+                 'Stretto di Corea', 'Stretto di Formosa', 'Golfo di Aden', 'Golfo di Oman', 'Mar di Sulu',
+                 'Mar di Celebes', 'Golfo del Tonchino', 'Golfo di San Lorenzo', 'Mar di Flores', 'Mar di Banda',
+                 'Mare delle Molucche', 'Stretto di Makassar', 'Mare di Bismarck', 'Mare delle Salomone',
+                 'Golfo di Panama', 'Rio de la Plata', 'Stretto di Bass', 'Golfo di California', 'Mar Cinese Meridionale'}

@@ -35,14 +35,25 @@ OUT_JS = os.path.join(HERE, '..', '..', 'game', 'js', 'map-data.js')
 CACHE = os.path.join(DATA, 'cache')
 os.makedirs(CACHE, exist_ok=True)
 
-PROJ = '+proj=laea +lat_0=52 +lon_0=16 +datum=WGS84 +units=km'
-KM = 2.0                                   # km per pixel
-X0, X1, Y0, Y1 = -2350, 2900, -2350, 2300  # estensione in km
-W, H = int((X1 - X0) / KM), int((Y1 - Y0) / KM)
-CLIP = box(-45, 18, 80, 82)
+# Proiezione cilindrica di Miller centrata a 11°E: il taglio della mappa cade a 169°O,
+# nello stretto di Bering, e la mappa si richiude su se stessa in orizzontale (come HOI4).
+LON0 = 11.0
+SEAM = LON0 - 180
+PROJ = f'+proj=mill +lon_0={LON0} +datum=WGS84 +units=km'
+KM = 4.0                                   # km per pixel (all'equatore)
+LAT_S, LAT_N = -57.0, 80.0
 FWD = Transformer.from_crs('EPSG:4326', PROJ, always_xy=True)
 INV = Transformer.from_crs(PROJ, 'EPSG:4326', always_xy=True)
+_XE = abs(FWD.transform(SEAM + 1e-7, 0)[0])
+X0, X1 = -_XE, _XE
+Y0, Y1 = FWD.transform(LON0, LAT_S)[1], FWD.transform(LON0, LAT_N)[1]
+W, H = int(round((X1 - X0) / KM)), int(round((Y1 - Y0) / KM))
+CLIP = box(-180, LAT_S - 1, 180, LAT_N + 1)
+WEST, EAST = box(-180, -90, SEAM, 90), box(SEAM, -90, 180, 90)
 PX_KM2 = KM * KM
+# area reale di un pixel per riga (Miller: scala orizzontale cos(lat), verticale cos(0.8 lat))
+_rows_lat = INV.transform(np.full(H, LON0), Y1 - (np.arange(H) + 0.5) * KM)[1]
+ROW_KM2 = PX_KM2 * np.cos(np.radians(_rows_lat)) * np.cos(np.radians(0.8 * np.asarray(_rows_lat)))
 RNG = np.random.default_rng(1936)
 T0 = time.time()
 
@@ -57,11 +68,30 @@ def to_px(lon, lat):
 
 
 def geom_px(g):
-    """Geometria lon/lat -> coordinate pixel."""
+    """Geometria lon/lat -> coordinate pixel (tagliata sul meridiano di giunzione)."""
     g = g.intersection(CLIP) if not CLIP.contains(g) else g
     if g.is_empty:
         return g
-    return stransform(lambda x, y, z=None: to_px(x, y), g)
+    out = []
+    for part in getattr(g, 'geoms', [g]):
+        b = part.bounds
+        pieces = [part.intersection(WEST), part.intersection(EAST)] if b[0] < SEAM < b[2] else [part]
+        for p in pieces:
+            for q in getattr(p, 'geoms', [p]):
+                if q.is_empty or q.geom_type not in ('Polygon', 'LineString'):
+                    continue
+                q = stransform(lambda x, y, z=None: to_px(x, y), q)
+                if q.bounds[2] - q.bounds[0] > W * 0.6:
+                    continue  # attraversa ancora la giunzione: scartato
+                out.append(q)
+    if not out:
+        return Polygon()
+    if len(out) == 1:
+        return out[0]
+    if out[0].geom_type == 'LineString':
+        from shapely.geometry import MultiLineString
+        return MultiLineString([o for o in out if o.geom_type == 'LineString'])
+    return MultiPolygon([o for o in out if o.geom_type == 'Polygon'])
 
 
 def load(name):
@@ -86,7 +116,7 @@ def nearest_fill(arr, valid):
 def neighbors_pairs(lab):
     """Coppie (a, b, lunghezza bordo) di etichette diverse adiacenti (4-connessione)."""
     out = {}
-    for a, b in ((lab[:, :-1], lab[:, 1:]), (lab[:-1, :], lab[1:, :])):
+    for a, b in ((lab[:, :-1], lab[:, 1:]), (lab[:-1, :], lab[1:, :]), (lab[:, -1:], lab[:, :1])):
         m = (a != b) & (a > 0) & (b > 0)
         x, y = a[m].astype(np.int64), b[m].astype(np.int64)
         lo, hi = np.minimum(x, y), np.maximum(x, y)
@@ -232,6 +262,10 @@ def build_countries(land, adm, adm_feats):
         a0 = p['adm0_a3']
         if p['adm1_code'] in ADM1_OVERRIDE:
             adm_code[i + 1] = CODE_ID[ADM1_OVERRIDE[p['adm1_code']]]
+        elif a0 == 'CHN':
+            adm_code[i + 1] = CODE_ID[CHN_PROVINCES.get(p.get('name'), 'CHI')]
+        elif a0 == 'RUS' and p.get('name') in RUS_PROVINCES:
+            adm_code[i + 1] = CODE_ID[RUS_PROVINCES[p['name']]]
         elif a0 in DIRECT_ADM0:
             adm_code[i + 1] = CODE_ID[DIRECT_ADM0[a0]]
         else:
@@ -245,6 +279,11 @@ def build_countries(land, adm, adm_feats):
         xs, ys = to_px(*zip(*poly))
         m = raster([(Polygon(list(zip(xs, ys))), 1)], np.uint8) > 0
         ctry[m] = CODE_ID[code]
+    for code, poly, a0s in POLY_OVERRIDE_ADM0:
+        xs, ys = to_px(*zip(*poly))
+        m = raster([(Polygon(list(zip(xs, ys))), 1)], np.uint8) > 0
+        m &= np.isin(a0_of, list(a0s))[adm]
+        ctry[m] = CODE_ID[code]
     valid = ctry > 0
     ctry = nearest_fill(ctry, valid)
     ctry[~land] = 0
@@ -255,10 +294,13 @@ def build_countries(land, adm, adm_feats):
 # --------------------------------------------------------------------------------------
 # 3. stati
 # --------------------------------------------------------------------------------------
-def country_class(code, adm0):
-    if adm0 in COLONY_ADM0:
-        return 'D'
-    return COUNTRIES[code][2]
+def country_class(code, adm0, lon=0.0, lat=50.0):
+    return density_class(code, adm0, float(lon), float(lat))
+
+
+def px_lonlat(cx, cy):
+    lon, lat = INV.transform(X0 + (np.asarray(cx) + 0.5) * KM, Y1 - (np.asarray(cy) + 0.5) * KM)
+    return lon, lat
 
 
 def build_states(land, ctry, adm, adm_feats):
@@ -267,6 +309,13 @@ def build_states(land, ctry, adm, adm_feats):
         z = np.load(path, allow_pickle=True)
         return z['st'], list(z['meta'])
     say('stati')
+    # isolette senza regione amministrativa: prendono quella della terra piu' vicina dello
+    # stesso paese (altrimenti tutte le isole di un paese finirebbero in un unico stato sparso)
+    _, (ir, ic) = ndimage.distance_transform_edt(~(land & (adm > 0)), return_indices=True)
+    adm = adm.copy()
+    fill = land & (adm == 0) & (ctry[ir, ic] == ctry)
+    adm[fill] = adm[ir[fill], ic[fill]]
+    del ir, ic
     # pezzo = (paese, regione amministrativa)
     key = ctry.astype(np.int64) * 10000 + adm
     key[~land] = 0
@@ -274,10 +323,12 @@ def build_states(land, ctry, adm, adm_feats):
     piece = inv.reshape(H, W).astype(np.int32)  # 0 = mare (uk[0] == 0)
     assert uk[0] == 0
     npc = len(uk)
-    area = np.bincount(piece.ravel(), minlength=npc).astype(float) * PX_KM2
     rows, cols = np.indices((H, W))
-    cy = np.bincount(piece.ravel(), weights=rows.ravel(), minlength=npc) / np.maximum(area / PX_KM2, 1)
-    cx = np.bincount(piece.ravel(), weights=cols.ravel(), minlength=npc) / np.maximum(area / PX_KM2, 1)
+    npx = np.bincount(piece.ravel(), minlength=npc).astype(float)
+    area = np.bincount(piece.ravel(), weights=ROW_KM2[rows].ravel(), minlength=npc)
+    cy = np.bincount(piece.ravel(), weights=rows.ravel(), minlength=npc) / np.maximum(npx, 1)
+    cx = np.bincount(piece.ravel(), weights=cols.ravel(), minlength=npc) / np.maximum(npx, 1)
+    del rows, cols
     pc = (uk // 10000).astype(int)
     pa = (uk % 10000).astype(int)
     adj = neighbors_pairs(piece)
@@ -305,9 +356,11 @@ def build_states(land, ctry, adm, adm_feats):
     SNX, SNY = smooth_noise(10, 6.0), smooth_noise(10, 6.0)
     garea = area.copy()
     target = np.zeros(npc)
+    plon, plat = px_lonlat(cx, cy)
     for i in range(1, npc):
         code, a0, f = pinfo(i)
-        target[i] = STATE_KM2[country_class(code, a0)]
+        target[i] = STATE_KM2[country_class(code, a0, plon[i], plat[i])]
+    members_of = {i: [i] for i in range(1, npc)}
     region = {}
     for i in range(1, npc):
         code, a0, f = pinfo(i)
@@ -322,7 +375,7 @@ def build_states(land, ctry, adm, adm_feats):
             if r != i or garea[r] >= 0.5 * target[r]:
                 continue
             # vicini del gruppo
-            members = [j for j in range(1, npc) if find(j) == r] if garea[r] > 0 else [r]
+            members = members_of[r]
             cand = {}
             for j in members:
                 for k, n in nb[j].items():
@@ -344,6 +397,7 @@ def build_states(land, ctry, adm, adm_feats):
             best = min(cand, key=score)
             parent[r] = best
             garea[best] += garea[r]
+            members_of[best] += members_of.pop(r)
             changed = True
     # isole e pezzi isolati piccoli: unisci allo stato piu' vicino dello stesso paese
     roots = sorted({find(i) for i in range(1, npc)})
@@ -360,6 +414,7 @@ def build_states(land, ctry, adm, adm_feats):
         if best is not None and bd < (300 / KM) ** 2:
             parent[r] = best
             garea[best] += garea[r]
+            members_of[best] += members_of.pop(r)
     lut = np.array([find(i) if i else 0 for i in range(npc)], np.int32)
     grp = lut[piece]
     roots = sorted({int(x) for x in np.unique(grp)} - {0})
@@ -373,7 +428,7 @@ def build_states(land, ctry, adm, adm_feats):
         rr, cc = np.nonzero(sub)
         rr = rr + sl[0].start
         cc = cc + sl[1].start
-        a = len(rr) * PX_KM2
+        a = ROW_KM2[rr].sum()
         k = 1
         if a > 2.2 * target[r]:
             k = int(round(a / (1.4 * target[r])))
@@ -385,7 +440,8 @@ def build_states(land, ctry, adm, adm_feats):
         if len(members) > 2 and len(regs) == 1 and next(iter(regs)) and len(next(iter(regs))) < 28:
             base = next(iter(regs))
         if k == 1:
-            meta.append(dict(name=base, owner=code, adm0=a0, cls=country_class(code, a0)))
+            lo, la = px_lonlat(cc.mean(), rr.mean())
+            meta.append(dict(name=base, owner=code, adm0=a0, cls=country_class(code, a0, lo, la)))
             st[rr, cc] = len(meta)
         else:
             pts = np.stack([cc + SNX[rr, cc] * 3, rr + SNY[rr, cc] * 3], 1).astype(float)
@@ -394,8 +450,9 @@ def build_states(land, ctry, adm, adm_feats):
             mc = pts.mean(0)
             for j in range(k):
                 d = c[j] - mc
+                lo, la = px_lonlat(c[j][0], c[j][1])
                 meta.append(dict(name=f'{base} {direction(d[0], -d[1])}', owner=code, adm0=a0,
-                                 cls=country_class(code, a0)))
+                                 cls=country_class(code, a0, lo, la)))
                 m = lab == j
                 st[rr[m], cc[m]] = len(meta)
     say(len(meta), 'stati')
@@ -446,7 +503,7 @@ def smooth_noise(sigma, amp):
 
 
 def split_regions(lab, nreg, target_px, nx, ny, label_base):
-    """Divide ogni regione di 'lab' (1..nreg) in province ~target_px[reg] pixel."""
+    """Divide ogni regione di 'lab' (1..nreg) in province di ~target_px[reg] km2."""
     out = np.zeros((H, W), np.int32)
     nextid = label_base
     owner = []
@@ -457,8 +514,7 @@ def split_regions(lab, nreg, target_px, nx, ny, label_base):
             continue
         sub = lab[sl] == r
         rr, cc = np.nonzero(sub)
-        n = len(rr)
-        k = max(1, int(round(n / target_px[r])))
+        k = max(1, int(round(ROW_KM2[rr + sl[0].start].sum() / target_px[r])))
         rr = rr + sl[0].start
         cc = cc + sl[1].start
         if k == 1:
@@ -522,13 +578,13 @@ def build_provinces(land, lake, st, smeta):
     nx = smooth_noise(6, 5.0)
     ny = smooth_noise(6, 5.0)
     nst = len(smeta)
-    tpx = [0] + [PROV_KM2[m['cls']] / PX_KM2 for m in smeta]
+    tpx = [0] + [PROV_KM2[m['cls']] for m in smeta]
     lp, lowner = split_regions(st, nst, tpx, nx, ny, 1)
     lp = fix_fragments(lp, st)
     say('province marittime')
     sreg, sregmeta = sea_regions(land, lake)
     nsr = len(sregmeta)
-    tpx = [0] + [(9000 if m['name'] in SEA_ENCLOSED else 30000) / PX_KM2 for m in sregmeta]
+    tpx = [0] + [sea_target_km2(m) for m in sregmeta]
     sp, sowner = split_regions(sreg, nsr, tpx, nx * 2, ny * 2, 1)
     sp = fix_fragments(sp, sreg)
     # rinumerazione compatta: prima le terre, poi i mari
@@ -559,12 +615,16 @@ def build_provinces(land, lake, st, smeta):
     return prov, list(pstate), sreg, sregmeta
 
 
+OCEANS = {'Oceano Atlantico', 'Atlantico meridionale', 'Oceano Pacifico', 'Pacifico meridionale',
+          'Oceano Indiano', 'Mar Glaciale Artico', 'Oceano Antartico'}
+
+
 def sea_regions(land, lake):
     sea = ~land & ~lake
     feats = load('ne_10m_geography_marine_polys')
-    shapes = []
+    items = []
     names = []
-    for f in sorted(feats, key=lambda f: -(f['properties'].get('scalerank') or 0)):
+    for f in feats:
         nm = f['properties'].get('name')
         if nm not in SEA_NAMES or not f['geometry']:
             continue
@@ -574,40 +634,58 @@ def sea_regions(land, lake):
         it = SEA_NAMES[nm]
         if it not in names:
             names.append(it)
-        shapes.append((geom_px(g), names.index(it) + 1))
-    # l'oceano per primo (scalerank 0) cosi' i mari interni lo coprono
-    shapes.sort(key=lambda s: 0 if names[s[1] - 1] == 'Oceano Atlantico' else 1)
-    r = raster(shapes, np.int32)
-    # Mediterraneo diviso in tre bacini secondo la longitudine
+        items.append((it in OCEANS, -g.area, geom_px(g), names.index(it) + 1))
+    # prima gli oceani, poi i mari dal piu' grande al piu' piccolo (i piu' piccoli restano sopra)
+    items.sort(key=lambda t: (not t[0], t[1]))
+    r = raster([(g, v) for _, _, g, v in items], np.int32)
     lon, lat = pixel_lonlat()
-    med = load('ne_10m_geography_marine_polys')
-    medg = [shape(f['geometry']) for f in med if f['properties'].get('name') == 'Mediterranean Sea']
+    medg = [shape(f['geometry']) for f in feats if f['properties'].get('name') == 'Mediterranean Sea']
     mr = raster([(geom_px(g), 1) for g in medg], np.uint8) > 0
-    mr &= (r == 0) | (r == names.index('Oceano Atlantico') + 1 if 'Oceano Atlantico' in names else False)
+    ocean_ids = {names.index(n) + 1 for n in OCEANS if n in names}
+    mr &= (r == 0) | np.isin(r, list(ocean_ids))
     for nm, lo, hi in (('Mediterraneo occidentale', -10, 9.5), ('Mediterraneo centrale', 9.5, 21),
                        ('Mediterraneo orientale', 21, 40)):
         names.append(nm)
         r[mr & (lon >= lo) & (lon < hi)] = len(names)
-    # Atlantico diviso per latitudine
-    if 'Oceano Atlantico' in names:
-        ai = names.index('Oceano Atlantico') + 1
-        names[ai - 1] = 'Atlantico centrale'
-        for nm, lo, hi in (('Atlantico settentrionale', 52, 90), ('Atlantico meridionale', 0, 41)):
-            names.append(nm)
-            r[(r == ai) & (lat >= lo) & (lat < hi)] = len(names)
     r[~sea] = 0
     r = nearest_fill(r, r > 0)
     r[~sea] = 0
-    # rinumera in modo compatto
+    # gli oceani sono divisi in zone di 30° x 20° (come le regioni marittime di HOI4)
+    lab_lat = lambda v: f"{abs(v)}°{'N' if v >= 0 else 'S'}"
+    lab_lon = lambda v: f"{abs(v)}°{'E' if v >= 0 else 'O'}"
+    for oid in sorted(ocean_ids):
+        m = r == oid
+        if not m.any():
+            continue
+        cl = np.floor(lon[m] / 30).astype(int)
+        ca = np.floor(lat[m] / 20).astype(int)
+        keys = cl * 100 + ca
+        idx = np.nonzero(m)
+        base = names[oid - 1]
+        for k in np.unique(keys):
+            sel = keys == k
+            cl0, ca0 = cl[sel][0], ca[sel][0]
+            names.append(f'{base} ({lab_lat(int(ca0 * 20 + 10))} {lab_lon(int(cl0 * 30 + 15))})')
+            r[idx[0][sel], idx[1][sel]] = len(names)
     used = [i for i in range(1, len(names) + 1) if (r == i).any()]
     lut = np.zeros(len(names) + 1, np.int32)
     meta = []
     for i, u in enumerate(used):
         lut[u] = i + 1
-        meta.append(dict(name=names[u - 1]))
+        m = r == u
+        meta.append(dict(name=names[u - 1], lon=float(lon[m].mean()), lat=float(lat[m].mean()),
+                         ocean=names[u - 1].split(' (')[0] in OCEANS))
     r = lut[r]
-    # spezza le regioni non connesse (es. Atlantico ai due lati delle isole britanniche resta unito)
     return r, meta
+
+
+def sea_target_km2(m):
+    europe = -35 <= m['lon'] <= 60 and m['lat'] >= 28
+    if m['ocean']:
+        return 50000 if europe else 160000
+    if m['name'] in SEA_ENCLOSED:
+        return 9000 if europe else 30000
+    return 20000 if europe else 60000
 
 
 _LL = None
