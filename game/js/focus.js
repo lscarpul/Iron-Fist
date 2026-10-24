@@ -311,7 +311,7 @@ function applyFocusEffects(c, e, f) {
   }
   for (const t of asList(e.invite)) focusInvite(c, t);
   for (const t of asList(e.guarantee)) if (S.countries[t]?.alive && !atWar(code, t)) guarantee(code, t);
-  for (const t of asList(e.nap)) if (S.countries[t]?.alive) {
+  for (const t of asList(e.nap)) if (S.countries[t]?.alive && !c.naps.has(t)) {
     c.naps.add(t); C(t).naps.add(code);
     log(`${c.name} e ${C(t).name} firmano un patto di non aggressione.`, involvesPlayer(code, t) ? 'good' : '');
   }
