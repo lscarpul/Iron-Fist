@@ -2,6 +2,20 @@
 // Logistica stile HOI4: capitale → ferrovie → hub di rifornimento → ultimo miglio (cavalli o camion).
 // Meteo (pioggia, fango, neve) e infrastrutture modificano movimento, rifornimenti e logorio.
 
+// ---------- ferrovie come tratte tra caselle adiacenti ----------
+const railKey = (a, b) => a < b ? a * 65536 + b : b * 65536 + a;
+function railLvl(a, b) { return S.railE[railKey(a, b)] || 0; }
+function setRail(a, b, l) {
+  const k = railKey(a, b);
+  S.railE[k] = Math.min(5, Math.max(S.railE[k] || 0, l));
+  S.rail[a] = Math.max(S.rail[a], S.railE[k]); S.rail[b] = Math.max(S.rail[b], S.railE[k]);
+}
+// distanza in km: province reali (provDistKm) o esagoni (~55 km)
+function landDistKm(a, b) {
+  if (typeof provDistKm === 'function' && typeof MAP !== 'undefined' && MAP.data) return provDistKm(a, b);
+  return hexDist(a, b) * 55;
+}
+
 // ---------- generazione di ferrovie, infrastrutture e hub ----------
 function landPathCost(t) {
   return { plains: 1, forest: 1.6, hills: 2.2, mountain: 4.5 }[t.terrain] || 1.5;
@@ -37,7 +51,8 @@ function hopsFrom(srcs, ok, maxHops = 99) {
 
 function landInitMap() {
   const T = S.tiles, N = T.length;
-  S.rail = new Array(N).fill(0);
+  S.rail = new Array(N).fill(0);   // livello massimo delle tratte che toccano la casella (per i tooltip)
+  S.railE = {};                     // tratte: railKey(a, b) -> livello 1-5
   S.infra = new Array(N).fill(0);
   S.weather = new Array(N).fill(0);
   S.hubs = [];
@@ -48,9 +63,13 @@ function landInitMap() {
     const dev = LAND_DEV[t.owner] || [1, 2];
     let inf = t.infra != null ? t.infra : dev[1] + (t.vp >= 20 ? 2 : t.vp ? 1 : 0) - (t.terrain === 'mountain' ? 1 : 0);
     S.infra[t.i] = Math.max(1, Math.min(5, inf));
-    if (fromMap) S.rail[t.i] = t.rail || 0;
   }
+  landInitWeatherCoords();
   if (fromMap) {
+    // tratte reali della mappa, oppure (in mancanza) province adiacenti entrambe servite dalla ferrovia
+    const rw = typeof MAP_DATA !== 'undefined' && MAP_DATA.railways;
+    if (rw && rw.length) for (const [a, b, l] of rw) setRail(a, b, l);
+    else for (const t of T) if (t.rail) for (const n of t.nb) if (T[n].rail && n > t.i) setRail(t.i, n, Math.min(t.rail, T[n].rail));
     for (const t of T) if (t.hub) addHub(t.i);
     for (const code in S.countries) if (S.countries[code].capital != null && !hubAt(S.countries[code].capital)) addHub(S.countries[code].capital);
     return;
@@ -75,10 +94,7 @@ function landInitMap() {
     const { prev } = landDijkstra(c.capital, own, t => landPathCost(t) * (S.rail[t.i] ? 0.5 : 1));
     for (const h of hubs) {
       const lvl = Math.min(5, dev[0] + (T[h].vp ? 1 : 0));
-      for (let u = h; u >= 0; u = prev[u]) {
-        S.rail[u] = Math.max(S.rail[u], lvl);
-        if (u === c.capital) break;
-      }
+      for (let u = h; u !== c.capital && prev[u] >= 0; u = prev[u]) setRail(u, prev[u], lvl);
     }
   }
   // linee internazionali tra capitali di paesi confinanti
@@ -97,8 +113,11 @@ function landInitMap() {
     const { dist, prev } = landDijkstra(a.capital, ok, t => landPathCost(t) * (S.rail[t.i] ? 0.4 : 1));
     if (!isFinite(dist[b.capital])) continue;
     const lvl = Math.min((LAND_DEV[a.code] || [1])[0], (LAND_DEV[b.code] || [1])[0]);
-    for (let u = b.capital; u >= 0 && u !== a.capital; u = prev[u]) S.rail[u] = Math.max(S.rail[u], lvl);
+    for (let u = b.capital; u !== a.capital && prev[u] >= 0; u = prev[u]) setRail(u, prev[u], lvl);
   }
+  // raccordi: esagoni ferroviari adiacenti sono collegati (la rete reale è più fitta delle sole linee principali)
+  const lvl0 = S.rail.slice();
+  for (const t of T) if (lvl0[t.i]) for (const n of t.nb) if (n > t.i && lvl0[n]) setRail(t.i, n, Math.min(lvl0[t.i], lvl0[n]));
 }
 function addHub(ti) {
   if (hubAt(ti)) return null;
@@ -114,24 +133,35 @@ function hash3(a, b, c) {
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
+// coordinate normalizzate per il clima: 0 = sud/ovest, 1 = nord/est della mappa
+function landInitWeatherCoords() {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const t of S.tiles) if (t.land) { x0 = Math.min(x0, t.cx); x1 = Math.max(x1, t.cx); y0 = Math.min(y0, t.cy); y1 = Math.max(y1, t.cy); }
+  S.wLat = S.tiles.map(t => 1 - (t.cy - y0) / Math.max(1, y1 - y0));
+  S.wEast = S.tiles.map(t => (t.cx - x0) / Math.max(1, x1 - x0));
+  // rumore per zone: regioni strategiche se la mappa le ha, altrimenti blocchi di ~4 esagoni
+  const blk = (x1 - x0) / 22;
+  S.wZone = S.tiles.map(t => t.region != null && t.region >= 0 ? [t.region, 0] : [Math.floor(t.cx / blk), Math.floor(t.cy / blk)]);
+}
 function updateWeather() {
   const dt = dayDate(S.day), m = dt.getUTCMonth();
   const winter = [1, 0.9, 0.4, 0, 0, 0, 0, 0, 0, 0.1, 0.45, 0.75][m];
   const mud = [0, 0, 0.5, 0.6, 0.15, 0, 0, 0, 0.1, 0.55, 0.7, 0.2][m];
   const rain = [0.2, 0.2, 0.3, 0.35, 0.3, 0.15, 0.1, 0.1, 0.25, 0.35, 0.4, 0.25][m];
   const period = Math.floor(S.day / 6);
-  const W = S.W, H = S.H;
+  if (!S.wLat) landInitWeatherCoords();
   for (const t of S.tiles) {
     if (!t.land) { S.weather[t.i] = W_CLEAR; continue; }
-    const lat = 1 - t.y / H, east = t.x / W;
-    const n = hash3(t.x >> 2, t.y >> 2, period) - 0.5, n2 = hash3(t.y >> 2, t.x >> 2, period + 7);
+    const lat = S.wLat[t.i], east = S.wEast[t.i], z = S.wZone[t.i];
+    const n = hash3(z[0], z[1], period) - 0.5, n2 = hash3(z[1] + 911, z[0], period + 7);
+    if (t.terrain === 'desert') { S.weather[t.i] = W_CLEAR; continue; }
     const cold = lat * 0.9 + east * 0.6 - 0.55 + (t.terrain === 'mountain' ? 0.25 : 0);
     const snow = cold * winter + n * 0.3;
     let w = W_CLEAR;
     if (snow > 0.55) w = W_DEEP;
     else if (snow > 0.28) w = W_SNOW;
     else {
-      const mudScore = mud * (east * 1.3 + lat * 0.3 - 0.35) + n * 0.25;
+      const mudScore = mud * (east * 1.3 + lat * 0.3 - 0.35) * Math.min(1, lat / 0.45) + n * 0.25;
       if (mudScore > 0.3) w = W_MUD;
       else if (n2 < rain * 0.6) w = W_RAIN;
     }
@@ -172,9 +202,9 @@ function supplySource(code) {
   return best;
 }
 // capacità di un tratto: vicino alla sorgente le linee si moltiplicano (nodi e scali), quindi portano di più
-function railCap(u, src) {
-  const d = hexDist(u, src);
-  return RAIL_CAP[S.rail[u]] * (d <= 3 ? 3 : d <= 6 ? 1.8 : 1);
+function railCap(u, p, src) {
+  const d = landDistKm(u, src);
+  return RAIL_CAP[railLvl(u, p)] * (d <= 170 ? 3 : d <= 340 ? 1.8 : 1);
 }
 function divSupplyUse(d) {
   const st = tplStats(d);
@@ -204,9 +234,9 @@ function computeSupply(code) {
     const u = h.pop(), bu = -h.lastK;
     if (bu < best[u]) continue;
     for (const v of T[u].nb) {
-      const tv = T[v];
-      if (!S.rail[v] || !ok(tv)) continue;
-      const bv = Math.min(bu, S.rail[v]);
+      const tv = T[v], lv = railLvl(u, v);
+      if (!lv || !ok(tv)) continue;
+      const bv = Math.min(bu, lv);
       if (bv > best[v]) { best[v] = bv; prev[v] = u; h.push(v, -bv); }
     }
   }
@@ -250,7 +280,8 @@ function computeSupply(code) {
         const tv = T[v];
         if (!ok(tv)) continue;
         const ter = LAND_TERRAIN[tv.terrain] || DEFAULT_TERRAIN;
-        const step = loss * ter.supply * weatherMul(v, 'supply') * (1.2 - 0.1 * S.infra[v]);
+        const km = Math.max(0.6, Math.min(2.2, landDistKm(u, v) / 55));
+        const step = loss * km * ter.supply * weatherMul(v, 'supply') * (1.2 - 0.1 * S.infra[v]);
         const fv = fu - step;
         if (fv < FLOW_MIN || (flow.get(v) || 0) >= fv) continue;
         flow.set(v, fv); q.push(v);
@@ -317,12 +348,12 @@ function computeSupply(code) {
   info.hubs.forEach((H, h) => {
     if (H.via !== 'ferrovia') return;
     const draw = caps[h] - left[h];
-    for (let u = H.hub.tile; u >= 0 && u !== src; u = prev[u]) load.set(u, (load.get(u) || 0) + draw);
+    for (let u = H.hub.tile; u !== src && prev[u] >= 0; u = prev[u]) load.set(u, (load.get(u) || 0) + draw);
   });
   let saturated = false;
   info.hubs.forEach(H => {
     let f = 1;
-    if (H.via === 'ferrovia') for (let u = H.hub.tile; u >= 0 && u !== src; u = prev[u]) f = Math.min(f, railCap(u, src) / Math.max(1e-6, load.get(u) || 0));
+    if (H.via === 'ferrovia') for (let u = H.hub.tile; u !== src && prev[u] >= 0; u = prev[u]) f = Math.min(f, railCap(u, prev[u], src) / Math.max(1e-6, load.get(u) || 0));
     H.railFactor = Math.min(1, f);
     if (f < 1) saturated = true;
   });
@@ -359,6 +390,8 @@ function logisticsStep() {
     if (!c.alive) continue;
     computeSupply(code);
   }
+  // la modalità mappa dei rifornimenti/meteo va ridisegnata quando cambiano i dati
+  if (typeof Render !== 'undefined' && (Render.mapMode === 'supply' || Render.mapMode === 'weather') && LandRender.provinceMap()) S.mapDirty = true;
   // i depositi delle divisioni si svuotano o si riempiono gradualmente
   for (const d of S.divs) {
     if (d.dead) continue;
@@ -375,16 +408,26 @@ function landBuildCheck(c, type, ti) {
   if (t.owner !== c.code || t.ctrl !== c.code) return 'Puoi costruire solo nel tuo territorio controllato';
   if (c.construction.some(j => j.tile === ti && j.type === type)) return 'Già in costruzione';
   if (type === 'rail') {
-    if (S.rail[ti] >= 5) return 'Ferrovia già al livello massimo';
-    if (!S.rail[ti] && !t.nb.some(n => S.rail[n] > 0)) return 'La nuova ferrovia deve collegarsi a una linea esistente';
+    const inc = t.nb.filter(n => railLvl(ti, n) > 0);
+    if (inc.length && inc.every(n => railLvl(ti, n) >= 5)) return 'Ferrovia già al livello massimo';
+    if (!inc.length && !t.nb.some(n => S.rail[n] > 0 && S.tiles[n].land)) return 'La nuova ferrovia deve collegarsi a una linea esistente';
   } else if (type === 'hub') {
     if (hubAt(ti)) return 'C\'è già un hub';
     if (!S.rail[ti]) return 'Un hub va costruito su una ferrovia';
-    if (S.hubs.some(h => hexDist(h.tile, ti) <= 2)) return 'Troppo vicino a un altro hub';
+    if (S.hubs.some(h => landDistKm(h.tile, ti) < 120)) return 'Troppo vicino a un altro hub (minimo 120 km)';
   } else if (type === 'infra') {
     if (S.infra[ti] >= 5) return 'Infrastrutture già al massimo';
   }
   return null;
+}
+// potenzia di un livello tutte le tratte della casella; se non ne ha, la collega alla linea vicina migliore
+function upgradeRail(ti) {
+  const T = S.tiles, inc = T[ti].nb.filter(n => railLvl(ti, n) > 0);
+  if (inc.length) for (const n of inc) setRail(ti, n, railLvl(ti, n) + 1);
+  else {
+    const n = T[ti].nb.filter(m => T[m].land && S.rail[m] > 0).sort((a, b) => S.rail[b] - S.rail[a])[0];
+    if (n != null) setRail(ti, n, 1);
+  }
 }
 function hexDist(a, b) {
   const A = S.tiles[a], B = S.tiles[b];
@@ -404,7 +447,7 @@ function queueLandBuild(c, type, ti) {
 function landBuildDone(c, j) {
   if (j.type !== 'rail' && j.type !== 'hub' && j.type !== 'infra') return false;
   const isP = c.code === S.player;
-  if (j.type === 'rail') S.rail[j.tile] = Math.min(5, S.rail[j.tile] + 1);
+  if (j.type === 'rail') upgradeRail(j.tile);
   else if (j.type === 'infra') S.infra[j.tile] = Math.min(5, S.infra[j.tile] + 1);
   else addHub(j.tile);
   if (isP) log(j.type === 'rail' ? `Ferrovia potenziata al livello ${S.rail[j.tile]}.` : j.type === 'hub' ? 'Nuovo hub di rifornimento operativo.' : `Infrastrutture portate al livello ${S.infra[j.tile]}.`, 'good');
@@ -421,7 +464,7 @@ function aiLogistics(c) {
     if (H.via !== 'ferrovia' || (H.railFactor ?? 1) >= 0.95 || H.ratio > 0.8) continue;
     // anello più debole di proprietà del paese lungo la linea
     let worst = -1;
-    for (const t of T) if (t.owner === c.code && t.ctrl === c.code && S.rail[t.i] && S.rail[t.i] < 5 && hexDist(t.i, H.hub.tile) <= 12) {
+    for (const t of T) if (t.owner === c.code && t.ctrl === c.code && S.rail[t.i] && S.rail[t.i] < 5 && landDistKm(t.i, H.hub.tile) <= 650) {
       if (worst < 0 || S.rail[t.i] < S.rail[worst]) worst = t.i;
     }
     if (worst >= 0 && !queueLandBuild(c, 'rail', worst)) return;

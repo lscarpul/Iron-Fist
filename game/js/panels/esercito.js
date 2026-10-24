@@ -220,8 +220,8 @@ function paradropCheck(c, ti) {
   if (!t.land) return 'Bisogna lanciarsi sulla terraferma';
   if (!allied(t.ctrl, c.code) && !atWar(t.ctrl, c.code)) return 'Territorio neutrale';
   if (hasHostile(ti, c.code)) return 'Zona di lancio occupata da truppe nemiche';
-  const near = S.hubs.some(h => allied(S.tiles[h.tile].ctrl, c.code) && hexDist(h.tile, ti) <= 12);
-  return near ? null : 'Troppo lontano dalle basi (max 12 esagoni da un hub amico)';
+  const near = S.hubs.some(h => allied(S.tiles[h.tile].ctrl, c.code) && landDistKm(h.tile, ti) <= 650);
+  return near ? null : 'Troppo lontano dalle basi (max 650 km da un hub amico)';
 }
 function doParadrop(ti) {
   const p = C(S.player);

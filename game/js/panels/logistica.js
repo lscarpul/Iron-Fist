@@ -55,7 +55,7 @@ function landPanelLogistica(p) {
 }
 
 const LOGISTICA_ACTIONS = {
-  mapMode(arg) { LandUI.mapMode = arg || null; S.landOverlayDirty = true; },
+  mapMode(arg) { setLandMapMode(arg); },
   autoMotor() { const p = C(S.player); p.autoMotor = !p.autoMotor; computeSupply(p.code); },
   buyTrucks() { const p = C(S.player); if (p.equipment >= 150) { p.equipment -= 150; addTrucks(p, 100); } },
   motor(arg) {

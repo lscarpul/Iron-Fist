@@ -76,8 +76,7 @@ function defValue(ti, vsOwner) {
 }
 function terrainOf(ti) {
   const t = S.tiles[ti];
-  if (t.vp >= 5 && !LAND_TERRAIN[t.terrain]?.width) return LAND_TERRAIN.urban;
-  if (t.vp >= 5) return LAND_TERRAIN.urban;
+  if (t.vp >= 5 && typeof MAP === 'undefined') return LAND_TERRAIN.urban; // mappa esagonale: le città contano come urbano
   return LAND_TERRAIN[t.terrain] || DEFAULT_TERRAIN;
 }
 
