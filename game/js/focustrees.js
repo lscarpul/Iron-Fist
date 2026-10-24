@@ -92,7 +92,7 @@ defTree('G', 'Il Terzo Reich', [
   F('G_danube', 'Diplomazia danubiana', 4, { pre: ['G_anticom'], cond: { year: 1940 }, eff: { invite: ['R', 'L'] }, ai: 10 }),
   F('G_danzig', 'Danzica o guerra', 0, { pre: ['G_sudeten'], cond: { date: '1939-08-01', alive: 'P' }, eff: { war: 'P' }, ai: 10 }),
   F('G_mrp', 'Patto Molotov-Ribbentrop', 2, { pre: ['G_sudeten', 'G_steel'], cond: { year: 1939, alive: 'S' }, eff: { nap: 'S' }, ai: 10 }),
-  F('G_tripart', 'Patto Tripartito', 4, { pre: ['G_danube'], cond: { year: 1940 }, eff: { invite: ['Y', 'K'], mods: { war_support: 0.05 } }, ai: 10 }),
+  F('G_tripart', 'Patto Tripartito', 4, { pre: ['G_danube'], cond: { year: 1940 }, eff: { invite: ['Y', 'K', 'JAP'], mods: { war_support: 0.05 } }, ai: 10 }),
   F('G_weser', 'Weserübung', 0, { pre: ['G_danzig'], cond: { date: '1940-03-15', war: true }, eff: { war: ['D', 'N'] }, ai: 10 }),
   F('G_gelb', 'Fall Gelb', 1, { pre: ['G_danzig'], cond: { date: '1940-04-15', war: true }, eff: { war: 'B', atkBonus: 0.05 }, ai: 10 }),
   F('G_balkan', 'Operazione Marita', 3, { pre: ['G_tripart'], cond: { year: 1941 }, eff: { war: ['Y', 'Q'] }, ai: 10 }),
@@ -108,7 +108,7 @@ defTree('G', 'Il Terzo Reich', [
   F('G_k_1914', 'Rivendicare i confini del 1914', 6, { pre: ['G_k_mittel'], cond: { year: 1939, alive: 'P' }, eff: { war: 'P' }, ai: 0 }),
   F('G_w_west', 'Riconciliazione con l\'Occidente', 8, { pre: ['G_weimar'], eff: { joinFaction: ['U', 'F'], civ: 2 }, ai: 0 }),
   F('G_w_disarm', 'Disarmo controllato', 8, { pre: ['G_w_west'], eff: { civ: 4, mods: { stability: 0.1 } }, ai: 0, ic: '🕊️' }),
-  F('G_w_europe', 'Unione europea', 8, { pre: ['G_w_disarm'], cond: { year: 1940 }, eff: { invite: ['A', 'C', 'B', 'D'] }, ai: 0 }),
+  F('G_w_europe', 'Unione europea', 8, { pre: ['G_w_disarm'], cond: { year: 1940 }, eff: { invite: ['A', 'C', 'B', 'HOL', 'LUX', 'D'] }, ai: 0 }),
   F('G_r_comintern', 'Asse Berlino-Mosca', 10, { pre: ['G_kpd'], eff: { joinFaction: 'S' }, ai: 0 }),
   F('G_r_council', 'Repubblica dei consigli', 10, { pre: ['G_r_comintern'], eff: { civ: 2, mil: 2, mods: { stability: 0.05 } }, ai: 0, ic: '☭' }),
   F('G_r_west', 'Rivoluzione in Occidente', 10, { pre: ['G_r_council'], cond: { year: 1939, alive: 'F' }, eff: { war: 'F' }, ai: 0 }),
@@ -156,7 +156,7 @@ defTree('S', 'Unione delle Repubbliche Socialiste Sovietiche', [
   F('S_rehab', 'Riabilitare gli ufficiali', 2, { pre: ['S_purge'], cond: { year: 1939 }, eff: { atkBonus: 0.1, xp: { army: 50 } }, ai: 9, ic: '🎖️' }),
   F('S_mrp', 'Patto Molotov-Ribbentrop', 0, { pre: ['S_nkvd'], cond: { year: 1939, alive: 'G' }, eff: { nap: 'G' }, ai: 10 }),
   F('S_winter', "Guerra d'Inverno", 0, { pre: ['S_mrp'], cond: { date: '1939-11-01', alive: 'K' }, eff: { war: 'K' }, ai: 10 }),
-  F('S_baltic', 'Sfera d\'influenza baltica', 1, { pre: ['S_mrp'], y: 4, cond: { year: 1940, alive: 'X' }, eff: { annex: 'X' }, ai: 10 }),
+  F('S_baltic', 'Sfera d\'influenza baltica', 1, { pre: ['S_mrp'], y: 4, cond: { year: 1940, anyAlive: ['X', 'EST', 'LAT', 'LIT'] }, eff: { annex: ['X', 'EST', 'LAT', 'LIT'] }, ai: 10 }),
   F('S_stavka', 'Stavka', 2, { pre: ['S_rehab'], cond: { war: true }, eff: { atkBonus: 0.05, mods: { planning: 0.1 } }, ai: 8 }),
   F('S_gpw', 'Grande Guerra Patriottica', 1, { pre: [['S_winter', 'S_baltic']], y: 5, cond: { atWarWith: ['G', 'I', 'R', 'H', 'K'] }, eff: { manpower: 300000, defBonus: 0.1, mods: { war_support: 0.2 } }, ai: 10 }),
   F('S_nostep', 'Non un passo indietro', 0, { pre: ['S_gpw'], eff: { defBonus: 0.15, mods: { entrenchment: 0.1 } }, ai: 10 }),
@@ -169,7 +169,7 @@ defTree('S', 'Unione delle Repubbliche Socialiste Sovietiche', [
   // Trotsky
   F('S_perm', 'Rivoluzione permanente', 6, { pre: ['S_trotsky'], eff: { xp: { army: 50 }, atkBonus: 0.05 }, ai: 0, ic: '☭' }),
   F('S_warsaw', 'Marcia su Varsavia', 6, { pre: ['S_perm'], cond: { year: 1938, alive: 'P' }, eff: { war: 'P' }, ai: 0 }),
-  F('S_eurorev', 'Rivoluzione europea', 6, { pre: ['S_warsaw'], eff: { invite: ['K', 'X', 'R', 'L', 'Y'], mods: { war_support: 0.1 } }, ai: 0, ic: '🤝' }),
+  F('S_eurorev', 'Rivoluzione europea', 6, { pre: ['S_warsaw'], eff: { invite: ['K', 'X', 'EST', 'LAT', 'LIT', 'R', 'L', 'Y'], mods: { war_support: 0.1 } }, ai: 0, ic: '🤝' }),
   // Zar
   F('S_holyrus', 'Santa Russia', 8, { pre: ['S_tsar'], eff: { mods: { stability: 0.2 }, manpower: 100000 }, ai: 0, ic: '✝️' }),
   F('S_restore', 'Restaurare la Duma', 8, { pre: ['S_holyrus'], eff: { civ: 3, ppGain: 0.25 }, ai: 0 }),
@@ -210,7 +210,7 @@ defTree('U', 'Regno Unito', [
   F('U_appease', 'Appeasement', 1, { pre: ['U_abdic'], eff: { mods: { stability: 0.1 }, civ: 1 }, ai: 10, ic: '🕊️' }),
   F('U_rearm', 'Riarmo della Gran Bretagna', 3, { pre: ['U_abdic'], cond: { year: 1937 }, eff: { mil: 3, mods: { war_support: 0.05 } }, ai: 10 }),
   F('U_guar', 'Garanzie europee', 1, { pre: ['U_appease'], cond: { date: '1939-03-01' }, eff: { guarantee: ['P', 'Q', 'R'] }, ai: 10 }),
-  F('U_entente', 'Allargare l\'Intesa', 3, { pre: ['U_rearm'], cond: { year: 1939, war: true }, eff: { invite: ['B', 'N', 'D', 'W'] }, ai: 10 }),
+  F('U_entente', 'Allargare l\'Intesa', 3, { pre: ['U_rearm'], cond: { year: 1939, war: true }, eff: { invite: ['B', 'HOL', 'N', 'D', 'W'] }, ai: 10 }),
   F('U_churchill', 'Churchill al governo', 2, { pre: ['U_guar', 'U_entente'], cond: { war: true }, eff: { leader: 'Winston Churchill', ppGain: 0.5, mods: { war_support: 0.2 } }, ai: 10, ic: '🎩' }),
   F('U_turkey', 'Corteggiare la Turchia', 0, { pre: ['U_churchill'], cond: { alive: 'T' }, eff: { invite: ['T', 'Q', 'Y'] }, ai: 8 }),
   F('U_arsenal', 'Arsenale della democrazia', 2, { pre: ['U_churchill'], eff: { equipment: 15000, mil: 2 }, ai: 9, ic: '📦' }),
@@ -302,6 +302,8 @@ defTree('I', "Regno d'Italia", [
   F('I_king', 'Il Re riprende il potere', 6, { pre: ['I_impero'], ex: ['I_pci'], eff: { ideology: 'neutral', leader: 'Vittorio Emanuele III', leaveFaction: true }, ai: 0, ic: '👑' }),
   F('I_pci', "L'insurrezione rossa", 8, { pre: ['I_impero'], eff: { ideology: 'communist', leader: 'Palmiro Togliatti', leaveFaction: true, mods: { stability: -0.1 } }, ai: 0 }),
   // storico
+  F('I_etiopia', "Completare la conquista dell'Etiopia", 2, { y: 0, days: 35, cond: { alive: 'ETH' }, eff: { war: 'ETH', xp: { army: 25 } }, ai: 10, ic: '⚔️' }),
+  F('I_albania', 'Protettorato albanese', 3, { pre: ['I_steel'], y: 4, cond: { date: '1939-04-01', alive: 'ALB' }, eff: { annex: 'ALB' }, ai: 10 }),
   F('I_spagna', 'Intervento in Spagna', 0, { pre: ['I_axis'], eff: { xp: { army: 40, air: 30 } }, ai: 9, ic: '🎖️' }),
   F('I_steel', "Patto d'Acciaio", 2, { pre: ['I_axis'], cond: { date: '1939-05-01' }, eff: { mods: { war_support: 0.1 }, mil: 1 }, ai: 10 }),
   F('I_danube', 'Influenza danubiana', 0, { pre: ['I_spagna'], eff: { invite: ['H', 'R', 'L'] }, ai: 8 }),
@@ -360,7 +362,7 @@ function minorTree(code, title, nat, o = {}) {
 minorTree('P', 'Seconda Repubblica di Polonia', [
   F('P_sanacja', 'Regime della Sanacja', 1, { eff: { mods: { stability: 0.05 }, ppGain: 0.25 }, ai: 8, ic: '🦅' }),
   F('P_cop', 'Distretto Industriale Centrale', 0, { pre: ['P_sanacja'], eff: { civ: 3, slots: 2 }, ai: 9, ic: '🏭' }),
-  F('P_intermarium', 'Intermarium', 2, { pre: ['P_sanacja'], eff: { createFaction: 'Intermarium', invite: ['X', 'K', 'R', 'C', 'H'] }, ai: 2 }),
+  F('P_intermarium', 'Intermarium', 2, { pre: ['P_sanacja'], eff: { createFaction: 'Intermarium', invite: ['X', 'EST', 'LAT', 'LIT', 'K', 'R', 'C', 'H'] }, ai: 2 }),
   F('P_alliance', 'Alleanza con la Francia', 1, { pre: ['P_sanacja'], y: 2, cond: { year: 1938 }, eff: { joinFaction: ['F', 'U'] }, ai: 8 }),
   F('P_lines', 'Fortificare la frontiera occidentale', 0, { pre: ['P_cop'], eff: { defBonus: 0.15, mods: { entrenchment: 0.1 } }, ai: 9, ic: '🧱' }),
   F('P_cavalry', 'Cavalleria polacca', 2, { pre: ['P_alliance'], eff: { speedBonus: 0.05, atkBonus: 0.05, divs: { inf: 2 } }, ai: 7, ic: '🐎' }),
@@ -395,7 +397,7 @@ minorTree('K', 'Finlandia', [
   F('K_ski', 'Truppe sciatrici', 0, { pre: ['K_motti'], eff: { speedBonus: 0.1, divs: { inf: 2 } }, ai: 8, ic: '⛷️' }),
   F('K_scand', 'Difesa scandinava', 2, { pre: ['K_motti'], eff: { createFaction: 'Unione Nordica', invite: ['W', 'N', 'D'] }, ai: 0.5 }),
   F('K_continue', 'Guerra di Continuazione', 1, { pre: ['K_ski'], y: 3, cond: { year: 1941, alive: 'S', notAllied: 'S' }, eff: { joinFaction: 'G', mods: { war_support: 0.1 } }, ai: 6 }),
-], { pol: { bloc: 'Unione Nordica', blocInvite: ['W', 'N', 'D', 'X'] } });
+], { pol: { bloc: 'Unione Nordica', blocInvite: ['W', 'N', 'D', 'X', 'EST', 'LAT', 'LIT'] } });
 
 minorTree('W', 'Svezia', [
   F('W_neutral', 'La neutralità svedese', 1, { eff: { mods: { stability: 0.1 } }, ai: 9, ic: '⚖️' }),
@@ -425,11 +427,11 @@ minorTree('X', 'Paesi Baltici', [
   F('X_west', 'Garanzie occidentali', 1, { pre: ['X_forest', 'X_ports'], cond: { year: 1939 }, eff: { joinFaction: ['U', 'F'] }, ai: 2 }),
 ]);
 
-minorTree('B', 'Benelux', [
-  F('B_neutral', 'Neutralità del Benelux', 1, { eff: { mods: { stability: 0.1 } }, ai: 9, ic: '⚖️' }),
+minorTree('B', 'Regno del Belgio', [
+  F('B_neutral', 'Neutralità belga', 1, { eff: { mods: { stability: 0.1 } }, ai: 9, ic: '⚖️' }),
   F('B_eben', "Forte Eben-Emael", 0, { pre: ['B_neutral'], eff: { defBonus: 0.2, mods: { entrenchment: 0.1 } }, ai: 9, ic: '🧱' }),
-  F('B_colonies', 'Risorse del Congo e delle Indie', 2, { pre: ['B_neutral'], eff: { civ: 2, mods: { resource_gain: 0.2 } }, ai: 8, ic: '⛏️' }),
-  F('B_water', 'Linea d\'acqua olandese', 0, { pre: ['B_eben'], eff: { defBonus: 0.1 }, ai: 7, ic: '🌊' }),
+  F('B_colonies', 'Risorse del Congo', 2, { pre: ['B_neutral'], eff: { civ: 2, mods: { resource_gain: 0.2 } }, ai: 8, ic: '⛏️' }),
+  F('B_water', 'Linea K-W', 0, { pre: ['B_eben'], eff: { defBonus: 0.1 }, ai: 7, ic: '🧱' }),
   F('B_allies', 'Accordo con gli Alleati', 2, { pre: ['B_colonies'], cond: { war: true }, eff: { joinFaction: ['U', 'F'] }, ai: 2 }),
 ]);
 

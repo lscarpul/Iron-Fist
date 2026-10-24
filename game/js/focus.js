@@ -28,6 +28,41 @@ const START_POLITICS = {
   A: ['neutral', 'Kurt Schuschnigg'], Z: ['democratic', 'Albert Meyer'], H: ['neutral', 'Miklós Horthy'],
   R: ['neutral', 'Carlo II'], Y: ['neutral', 'Principe Paolo'], L: ['neutral', 'Boris III'],
   Q: ['neutral', 'Giorgio II'], T: ['neutral', 'Mustafa Kemal Atatürk'],
+  // nazioni della mappa reale e del mondo (tag in stile HoI4)
+  HOL: ['democratic', 'Hendrikus Colijn'], LUX: ['democratic', 'Joseph Bech'], EST: ['neutral', 'Konstantin Päts'],
+  LAT: ['neutral', 'Kārlis Ulmanis'], LIT: ['neutral', 'Antanas Smetona'], ALB: ['neutral', 'Re Zog I'],
+  IRE: ['democratic', 'Éamon de Valera'], ICE: ['democratic', 'Hermann Jónasson'], EGY: ['neutral', 'Re Fuad I'],
+  IRQ: ['neutral', 'Re Ghazi'], PER: ['neutral', 'Reza Shah Pahlavi'], SAU: ['neutral', 'Ibn Saud'],
+  USA: ['democratic', 'Franklin D. Roosevelt'], JAP: ['fascist', 'Imperatore Hirohito'], CHI: ['neutral', 'Chiang Kai-shek'],
+  PRC: ['communist', 'Mao Zedong'], MAN: ['fascist', 'Pu Yi'], MEN: ['fascist', 'Demchugdongrub'],
+  SHX: ['neutral', 'Yan Xishan'], GXC: ['neutral', 'Li Zongren'], YUN: ['neutral', 'Long Yun'], XSM: ['neutral', 'Ma Bufang'],
+  SIK: ['neutral', 'Sheng Shicai'], MON: ['communist', 'Khorloogiin Choibalsan'], TIB: ['neutral', 'Reting Rinpoche'],
+  SIA: ['neutral', 'Phraya Phahon'], CAN: ['democratic', 'William Lyon Mackenzie King'], AST: ['democratic', 'Joseph Lyons'],
+  NZL: ['democratic', 'Michael Joseph Savage'], SAF: ['democratic', 'J. B. M. Hertzog'], RAJ: ['democratic', 'Lord Linlithgow'],
+  MEX: ['democratic', 'Lázaro Cárdenas'], BRA: ['neutral', 'Getúlio Vargas'], ARG: ['neutral', 'Agustín P. Justo'],
+  CHL: ['democratic', 'Arturo Alessandri'], PRU: ['neutral', 'Óscar R. Benavides'], COL: ['democratic', 'Alfonso López Pumarejo'],
+  VEN: ['neutral', 'Eleazar López Contreras'], ETH: ['neutral', 'Hailé Selassié'], LIB: ['democratic', 'Edwin Barclay'],
+  TAN: ['communist', 'Salchak Toka'], NEP: ['neutral', 'Juddha Shamsher Rana'], BHU: ['neutral', 'Jigme Wangchuck'],
+  AFG: ['neutral', 'Mohammed Zahir Shah'], PHI: ['democratic', 'Manuel L. Quezon'], GUA: ['neutral', 'Jorge Ubico'],
+  HON: ['neutral', 'Tiburcio Carías Andino'], ELS: ['neutral', 'Maximiliano Hernández Martínez'], NIC: ['neutral', 'Anastasio Somoza'],
+  COS: ['democratic', 'León Cortés Castro'], PAN: ['democratic', 'Harmodio Arias'], CUB: ['neutral', 'Fulgencio Batista'],
+  HAI: ['neutral', 'Sténio Vincent'], DOM: ['neutral', 'Rafael Trujillo'], ECU: ['neutral', 'Federico Páez'],
+  BOL: ['neutral', 'José Luis Tejada Sorzano'], PAR: ['neutral', 'Rafael Franco'], URU: ['neutral', 'Gabriel Terra'],
+  YEM: ['neutral', 'Imam Yahya'], OMA: ['neutral', 'Said bin Taimur'],
+};
+
+// nomi italiani per i tag che potrebbero non essere ancora sulla mappa (testi dei focus)
+const TAG_NAMES = {
+  HOL: 'Paesi Bassi', LUX: 'Lussemburgo', EST: 'Estonia', LAT: 'Lettonia', LIT: 'Lituania', ALB: 'Albania',
+  IRE: 'Irlanda', ICE: 'Islanda', EGY: 'Egitto', IRQ: 'Iraq', PER: 'Persia', SAU: 'Arabia Saudita',
+  USA: 'Stati Uniti', JAP: 'Giappone', CHI: 'Cina', PRC: 'Cina comunista', MAN: 'Manciukuò', MEN: 'Mengjiang',
+  SHX: 'Shanxi', GXC: 'Cricca del Guangxi', YUN: 'Yunnan', XSM: 'Xibei San Ma', SIK: 'Sinkiang', MON: 'Mongolia', TIB: 'Tibet',
+  SIA: 'Siam', CAN: 'Canada', AST: 'Australia', NZL: 'Nuova Zelanda', SAF: 'Sudafrica', RAJ: 'India britannica',
+  MEX: 'Messico', BRA: 'Brasile', ARG: 'Argentina', CHL: 'Cile', PRU: 'Perù', COL: 'Colombia', VEN: 'Venezuela',
+  ETH: 'Etiopia', LIB: 'Liberia', X: 'Paesi Baltici', TAN: 'Tannu Tuva', NEP: 'Nepal', BHU: 'Bhutan', AFG: 'Afghanistan',
+  PHI: 'Filippine', GUA: 'Guatemala', HON: 'Honduras', ELS: 'El Salvador', NIC: 'Nicaragua', COS: 'Costa Rica', PAN: 'Panama',
+  CUB: 'Cuba', HAI: 'Haiti', DOM: 'Repubblica Dominicana', ECU: 'Ecuador', BOL: 'Bolivia', PAR: 'Paraguay', URU: 'Uruguay',
+  YEM: 'Yemen', OMA: 'Oman',
 };
 
 // Modificatori permanenti (c.mods). Quelli segnati "wired" agiscono già sul gioco,
@@ -139,7 +174,9 @@ const curYear = () => dayDate(S.day).getUTCFullYear();
 const addMod = (c, k, v) => { c.mods[k] = +((c.mods[k] || 0) + v).toFixed(3); };
 const modOf = (c, k) => (c.mods && c.mods[k]) || 0;
 const asList = v => v == null ? [] : Array.isArray(v) ? v : [v];
-const countryName = code => (S && S.countries[code]?.name) || COUNTRY_DEFS[code]?.name || code;
+const countryName = code => (S && S.countries[code]?.name) || COUNTRY_DEFS[code]?.name || TAG_NAMES[code] || code;
+// nelle liste di bersagli contano solo i paesi presenti sulla mappa
+const existing = v => asList(v).filter(k => !S || S.countries[k]);
 
 function condMet(c, cond) {
   if (!cond) return true;
@@ -147,6 +184,8 @@ function condMet(c, cond) {
   if (cond.date && S.day < Math.round((Date.parse(cond.date) - START_TS) / DAY_MS)) return false;
   if (cond.alive && !asList(cond.alive).every(k => S.countries[k]?.alive)) return false;
   if (cond.dead && !asList(cond.dead).every(k => !S.countries[k]?.alive)) return false;
+  if (cond.anyAlive && !asList(cond.anyAlive).some(k => S.countries[k]?.alive)) return false;
+  if (cond.exists && !asList(cond.exists).every(k => S.countries[k])) return false;
   if (cond.ideology && !asList(cond.ideology).includes(c.ideology)) return false;
   if (cond.notIdeology && asList(cond.notIdeology).includes(c.ideology)) return false;
   if (cond.peace && enemiesOf(c.code).length) return false;
@@ -168,6 +207,8 @@ function condText(cond) {
   if (cond.date) { const d = new Date(Date.parse(cond.date)); r.push(`Dal ${d.getUTCDate()} ${MONTHS_IT[d.getUTCMonth()]} ${d.getUTCFullYear()}`); }
   if (cond.alive) r.push(`Esiste: ${names(cond.alive)}`);
   if (cond.dead) r.push(`Non esiste più: ${names(cond.dead)}`);
+  if (cond.anyAlive) r.push(`Esiste almeno uno tra: ${names(cond.anyAlive)}`);
+  if (cond.exists) r.push(`Presente sulla mappa: ${names(cond.exists)}`);
   if (cond.ideology) r.push(`Governo: ${asList(cond.ideology).map(i => IDEOLOGIES[i].short).join(' o ')}`);
   if (cond.notIdeology) r.push(`Governo non ${asList(cond.notIdeology).map(i => IDEOLOGIES[i].short).join(' né ')}`);
   if (cond.peace) r.push('In pace');
@@ -264,6 +305,10 @@ function applyFocusEffects(c, e, f) {
       if (!c.faction || !enemiesOf(code).length) joinFaction(code, leader.faction);
     }
   }
+  if (e.aid) for (const t in e.aid) if (S.countries[t]?.alive && !atWar(code, t)) {
+    C(t).equipment += e.aid[t];
+    log(`${c.name} invia ${fmt(e.aid[t])} di equipaggiamento a ${C(t).name}.`, involvesPlayer(code, t) ? 'good' : '');
+  }
   for (const t of asList(e.invite)) focusInvite(c, t);
   for (const t of asList(e.guarantee)) if (S.countries[t]?.alive && !atWar(code, t)) guarantee(code, t);
   for (const t of asList(e.nap)) if (S.countries[t]?.alive) {
@@ -326,7 +371,7 @@ const pct = v => `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`;
 const num = v => `${v > 0 ? '+' : ''}${fmt(v)}`;
 function effectText(e) {
   const r = [];
-  const names = v => asList(v).map(countryName).join(', ');
+  const names = v => (existing(v).length ? existing(v) : asList(v)).map(countryName).join(', ');
   if (e.text) r.push(e.text);
   if (e.ideology) r.push(`Il governo diventa ${IDEOLOGIES[e.ideology].short.toLowerCase()}${e.leader ? ` (${e.leader})` : ''}`);
   else if (e.leader) r.push(`Nuovo capo: ${e.leader}`);
@@ -350,6 +395,7 @@ function effectText(e) {
   if (e.invite) r.push(`Invita nella fazione: ${names(e.invite)}`);
   if (e.guarantee) r.push(`Garantisce l'indipendenza di ${names(e.guarantee)}`);
   if (e.nap) r.push(`Patto di non aggressione con ${names(e.nap)}`);
+  if (e.aid) for (const t in e.aid) r.push(`Invia ${fmt(e.aid[t])} di equipaggiamento a ${countryName(t)}`);
   if (e.annex) r.push(`Chiede l'annessione di ${names(e.annex)} (se rifiuta: guerra)`);
   if (e.war) r.push(`Dichiara guerra a ${names(e.war)}`);
   return r;
