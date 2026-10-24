@@ -13,7 +13,7 @@ const EconUI = {
 
   // ---------- produzione ----------
   linesHtml(p) {
-    const assigned = Econ.assignedMil(p), free = p.mil - assigned;
+    const assigned = Econ.assignedMil(p), free = Econ.landMil(p) - assigned;
     let h = `<h3>Produzione militare</h3>
       <div class="stats"><div><b>${p.mil}</b><small>fabbriche mil.</small></div><div><b>${assigned}</b><small>assegnate</small></div>
       <div><b class="${free ? 'warn' : ''}">${free}</b><small>libere</small></div></div>
@@ -254,7 +254,7 @@ const EconUI = {
     const actions = this.actionMap();
     UI.registerPanel({ id: 'produzione', title: 'Produzione', icon: 'factory', group: 'state', order: 40, width: 480,
       render: p => this.linesHtml(p) + this.mioHtml(p), actions,
-      badge: p => (p.mil - Econ.assignedMil(p)) || null });
+      badge: p => (Econ.landMil(p) - Econ.assignedMil(p)) || null });
     UI.registerPanel({ id: 'costruzione', title: 'Costruzione', icon: 'build', group: 'state', order: 41, width: 440,
       render: p => this.constructionHtml(p), actions });
     UI.registerPanel({ id: 'commercio', title: 'Commercio', icon: 'trade', group: 'state', order: 42, width: 480,

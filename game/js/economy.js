@@ -344,6 +344,10 @@ const Econ = {
     return { total, cg, tradeOut: fl.civOut, tradeIn: fl.civIn, avail, short: total - cg - fl.civOut + fl.civIn < 0 };
   },
   assignedMil(c) { return c.lines.reduce((s, l) => s + l.factories, 0); },
+  // fabbriche militari per l'equipaggiamento terrestre: quelle sulle linee aeree (air.js) sono escluse
+  landMil(c) { return Math.max(0, c.mil - (typeof airFactoriesUsed === 'function' && c.airLines ? airFactoriesUsed(c) : 0)); },
+  // bombardamenti strategici e carenza di convogli (airnaval-core.js)
+  industryMult(c) { return typeof anIndustryMult === 'function' && S.an ? anIndustryMult(c) : 1; },
 
   // ---------- linee di produzione ----------
   addLine(c, fam, modelId) {
@@ -358,7 +362,7 @@ const Econ = {
   setLineFactories(c, id, n) {
     const ln = this.line(c, id);
     if (!ln) return false;
-    const free = c.mil - this.assignedMil(c) + ln.factories;
+    const free = this.landMil(c) - this.assignedMil(c) + ln.factories;
     n = Math.max(0, Math.min(free, Math.floor(n)));
     if (n > ln.factories) {
       // le fabbriche aggiunte partono dall'efficienza base: la media della linea cala
@@ -636,9 +640,10 @@ const Econ = {
     }
 
     // produzione: le linee in cima hanno la priorità sulle risorse
+    const landMil = this.landMil(c), indMult = this.industryMult(c);
     let assigned = 0;
     for (const ln of c.lines) {
-      if (assigned + ln.factories > c.mil) ln.factories = Math.max(0, c.mil - assigned); // fabbriche perse
+      if (assigned + ln.factories > landMil) ln.factories = Math.max(0, landMil - assigned); // fabbriche perse o passate agli aerei
       assigned += ln.factories;
       const m = MODEL_BY_ID[ln.model], mio = this.mioOf(c, ln);
       ln.short = [];
@@ -652,7 +657,7 @@ const Econ = {
         if (got < need) { ln.short.push(r); ratio = Math.min(ratio, got / need); }
       }
       ln.resF = 0.25 + 0.75 * ratio; // senza risorse si produce solo una frazione
-      const ic = ln.factories * ECO.IC_PER_FACTORY * ln.eff * (1 + this.outputBonus(c, ln)) * ln.resF;
+      const ic = ln.factories * ECO.IC_PER_FACTORY * ln.eff * (1 + this.outputBonus(c, ln)) * ln.resF * indMult;
       const cost = m.cost * (this.mioHas(mio, 'cost') ? 0.92 : 1);
       ln.out = ic / cost;
       this.addStock(c, ln.fam, ln.out, m.q * (this.mioHas(mio, 'qual') ? 1.05 : 1));
@@ -679,7 +684,7 @@ const Econ = {
       const j = c.construction[i];
       j.civs = Math.min(ECO.CIVS_PER_PROJECT, civs);
       civs -= j.civs;
-      j.prog += j.civs * ECO.CP_PER_CIV * Math.max(0.1, 1 + this.constructionMod(c, j.type));
+      j.prog += j.civs * ECO.CP_PER_CIV * Math.max(0.1, 1 + this.constructionMod(c, j.type)) * indMult;
     }
     for (let i = c.construction.length - 1; i >= 0; i--) {
       const j = c.construction[i];
@@ -735,7 +740,8 @@ const Econ = {
   },
 
   aiLines(c, war) {
-    let free = c.mil - this.assignedMil(c);
+    const mil = this.landMil(c);
+    let free = mil - this.assignedMil(c);
     const target = c.armorTech ? { fanteria: 0.45, artiglieria: 0.2, supporto: 0.1, carri: 0.15, camion: 0.1 }
       : { fanteria: 0.55, artiglieria: 0.25, supporto: 0.12, camion: 0.08 };
     while (free > 0) {
@@ -743,7 +749,7 @@ const Econ = {
       for (const f in target) {
         if (!this.familyAvailable(c, f)) continue;
         const have = c.lines.filter(l => l.fam === f).reduce((s, l) => s + l.factories, 0);
-        const d = target[f] * c.mil - have;
+        const d = target[f] * mil - have;
         if (d > bd) { bd = d; best = f; }
       }
       if (!best) break;
@@ -831,7 +837,7 @@ const Econ = {
     const stock = Object.keys(c.stock).map(f => `${f} ${Math.floor(c.stock[f])}`).join(', ');
     return `Economia di ${c.name}. Legge economica: ${ECON_LAWS[c.econLaw].name}. Legge commerciale: ${TRADE_LAWS[c.tradeLaw].name}. ` +
       `Industria: ${INDUSTRY[c.industry].name}. Fabbriche: ${c.civ} civili (${cb.cg} ai beni di consumo, ${cb.tradeOut} al commercio, +${cb.tradeIn} dal commercio, ${cb.avail} libere), ` +
-      `${c.mil} militari (${c.mil - this.assignedMil(c)} non assegnate), ${c.refineries} raffinerie. Carburante ${Math.floor(c.fuel)}. ` +
+      `${c.mil} militari (${this.landMil(c) - this.assignedMil(c)} non assegnate, ${c.mil - this.landMil(c)} agli aerei), ${c.refineries} raffinerie. Carburante ${Math.floor(c.fuel)}. ` +
       `Risorse: ${res}. Linee: ${lines || 'nessuna'}. Accordi: ${deals}. Magazzino: ${stock}. Cantieri: ${c.construction.map(j => BUILDINGS[j.type].name).join(', ') || 'nessuno'}.`;
   },
 
