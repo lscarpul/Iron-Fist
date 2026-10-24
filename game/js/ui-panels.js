@@ -252,7 +252,7 @@ UI.registerPanel({
       h += `<div class="card"><div class="row"><b>${esc(f.name)}</b><small>${f.members.length} membri</small></div><div class="cflags">${f.members.map(m => `<span class="tag">${flag(C(m))}${esc(C(m).name)}</span>`).join('')}</div></div>`;
     }
     h += `<h3>${icon('war')} Guerre in corso</h3>`;
-    const wars = [...S.wars].map(k => `<div class="row"><span>${flag(C(k[0]))}${esc(C(k[0]).name)}</span>${icon('war', 14, 'bad')}<span>${esc(C(k[1]).name)}${flag(C(k[1]))}</span></div>`);
+    const wars = [...S.wars].map(k => k.includes('|') ? k.split('|') : [k[0], k[1]]).map(k => `<div class="row"><span>${flag(C(k[0]))}${esc(C(k[0]).name)}</span>${icon('war', 14, 'bad')}<span>${esc(C(k[1]).name)}${flag(C(k[1]))}</span></div>`);
     h += wars.length ? `<div class="card">${wars.join('')}</div>` : `<p class="hint">Nessuna guerra in corso.</p>`;
     h += `<h3>${icon('map')} Nazioni</h3><table class="tbl"><tr><th>Paese</th><th>Rapporti</th><th class="n">Div.</th></tr>`;
     for (const k in S.countries) {

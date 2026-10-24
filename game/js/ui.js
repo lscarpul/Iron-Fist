@@ -101,8 +101,25 @@ const UI = {
       this.dirty = true;
     });
     window.addEventListener('keydown', e => this.onKey(e));
+    this.initMapModes();
     this.initMapInput();
     this.dirty = true;
+  },
+
+  // barra delle modalità mappa (se il renderer le espone: Render.MAP_MODES = [[id, nome]], Render.setMapMode)
+  initMapModes() {
+    const modes = Render.MAP_MODES;
+    if (!modes || !Render.setMapMode) return;
+    const ICO = { political: 'map', terrain: 'fort', state: 'target', region: 'diplomacy', infra: 'infra', railway: 'rail', resources: 'steel', supply: 'supply' };
+    const nav = $('mapmodes');
+    nav.innerHTML = modes.map(([id, name]) => `<button data-mode="${id}" title="${esc(name)}">${icon(ICO[id] || 'map', 18)}</button>`).join('');
+    const sync = () => nav.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === (Render.mapMode || modes[0][0])));
+    nav.addEventListener('click', e => {
+      const b = e.target.closest('[data-mode]'); if (!b) return;
+      Render.setMapMode(b.dataset.mode); sync();
+    });
+    nav.classList.remove('hidden');
+    sync();
   },
 
   buildTabs() {
