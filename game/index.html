@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Iron Fist</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="start">
+  <div class="start-inner">
+    <h1>IRON FIST</h1>
+    <p class="sub">Europa, 1° gennaio 1936. Scegli la nazione da guidare attraverso la tempesta.</p>
+    <h2>Grandi potenze</h2>
+    <div id="majors" class="cgrid"></div>
+    <h2>Nazioni minori</h2>
+    <div id="minors" class="cgrid"></div>
+    <details><summary>Come si gioca</summary><div id="start-help"></div></details>
+  </div>
+</div>
+
+<div id="game" class="hidden">
+  <header id="topbar">
+    <div id="tb-country"></div>
+    <div id="tb-res"></div>
+    <div id="tb-time">
+      <div id="tb-date"></div>
+      <div id="tb-speed">
+        <button data-speed="0" title="Pausa (Spazio)">❚❚</button>
+        <button data-speed="1" title="Velocità 1">1</button>
+        <button data-speed="2" title="Velocità 2">2</button>
+        <button data-speed="3" title="Velocità 3">3</button>
+        <button data-speed="4" title="Velocità 4">4</button>
+        <button data-speed="5" title="Velocità 5">5</button>
+      </div>
+      <button id="btn-help" title="Aiuto">?</button>
+    </div>
+  </header>
+  <div id="side">
+    <nav id="tabs">
+      <button data-tab="politica">Politica</button>
+      <button data-tab="produzione">Produzione</button>
+      <button data-tab="esercito">Esercito</button>
+      <button data-tab="diplomazia">Diplomazia</button>
+    </nav>
+    <aside id="panel"></aside>
+    <section id="log"></section>
+  </div>
+  <main id="mapwrap">
+    <canvas id="map"></canvas>
+    <div id="tooltip" class="hidden"></div>
+  </main>
+</div>
+
+<div id="modal-bg" class="hidden"><div id="modal"></div></div>
+
+<script src="js/util.js"></script>
+<script src="js/data.js"></script>
+<script src="js/map.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

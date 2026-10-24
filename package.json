@@ -1,0 +1,30 @@
+{
+  "name": "iron-fist",
+  "productName": "Iron Fist",
+  "version": "0.1.0",
+  "description": "Gioco di strategia ispirato a Hearts of Iron IV. Europa, 1936-1946.",
+  "main": "electron/main.js",
+  "author": "lscarpul",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "44.9.3",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "com.lscarpul.ironfist",
+    "productName": "Iron Fist",
+    "files": ["electron/**", "game/**", "package.json"],
+    "directories": { "output": "dist" },
+    "win": { "target": ["nsis", "portable"] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "shortcutName": "Iron Fist" },
+    "portable": { "artifactName": "IronFist-${version}-portable.exe" },
+    "linux": { "target": ["AppImage"] },
+    "mac": { "target": ["dmg"] }
+  }
+}
