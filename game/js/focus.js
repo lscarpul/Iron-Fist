@@ -361,9 +361,9 @@ function focusInvite(c, t) {
       [{ label: 'Entra', fn: () => joinFaction(t, c.faction) }, { label: 'Rifiuta' }]);
     return;
   }
-  // un paese neutrale non entra in una fazione in guerra, a meno di combattere già lo stesso nemico
+  // un paese di ideologia diversa non entra in una fazione in guerra, a meno di combattere già lo stesso nemico
   const facEnemies = membersOf(c.code).flatMap(m => enemiesOf(m));
-  if (facEnemies.length && !facEnemies.some(e => atWar(e, t))) {
+  if (facEnemies.length && tg.ideology !== c.ideology && !facEnemies.some(e => atWar(e, t))) {
     log(`${tg.name} resta fuori dalla guerra e declina l'invito di ${c.name}.`, involvesPlayer(c.code) ? 'warn' : '');
     return;
   }
