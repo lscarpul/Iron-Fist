@@ -62,24 +62,7 @@ const UNIT_TYPES = {
 
 const BUILD_COST = { civ: 90, mil: 75 };
 
-const FOCUSES = [
-  { id: 'ind1', name: 'Espansione industriale', desc: '+3 fabbriche civili', days: 35, apply: c => { c.civ += 3; } },
-  { id: 'arm1', name: 'Riarmo', desc: '+3 fabbriche militari', days: 35, apply: c => { c.mil += 3; } },
-  { id: 'ind2', name: 'Industria pesante', req: ['ind1'], desc: '+2 civili, +2 militari', days: 42, apply: c => { c.civ += 2; c.mil += 2; } },
-  { id: 'arm2', name: 'Economia di guerra', req: ['arm1'], desc: '+4 militari, +20% equipaggiamento', days: 50, apply: c => { c.mil += 4; c.eqBonus += 0.2; } },
-  { id: 'army1', name: "Riforma dell'esercito", desc: '+10% attacco divisioni', days: 35, apply: c => { c.atkBonus += 0.1; } },
-  { id: 'tank', name: 'Ricerca corazzata', desc: 'Sblocca le divisioni corazzate', days: 50, apply: c => { c.armorTech = true; }, avail: c => !c.armorTech },
-  { id: 'army2', name: 'Guerra lampo', req: ['army1', 'tank'], desc: '+15% attacco, +10% velocità', days: 50, apply: c => { c.atkBonus += 0.15; c.speedBonus += 0.1; } },
-  { id: 'def1', name: 'Dottrina difensiva', desc: '+15% difesa divisioni', days: 35, apply: c => { c.defBonus += 0.15; } },
-  { id: 'def2', name: 'Linee fortificate', req: ['def1'], desc: '+20% difesa divisioni', days: 50, apply: c => { c.defBonus += 0.2; } },
-  { id: 'mob', name: 'Mobilitazione generale', desc: '+150k manodopera, +30% crescita', days: 35, apply: c => { c.manpower += 150000; c.mpBonus += 0.3; } },
-  { id: 'prop', name: 'Ministero della propaganda', desc: '+1 potere politico al giorno', days: 35, apply: c => { c.ppGain += 1; } },
-  { id: 'infra', name: 'Ferrovie strategiche', desc: '+15% velocità di movimento', days: 35, apply: c => { c.speedBonus += 0.15; } },
-  { id: 'logi', name: 'Logistica militare', desc: '+50% rinforzi e recupero organizzazione', days: 35, apply: c => { c.recBonus += 0.5; } },
-];
-const FOCUS_BY_ID = Object.fromEntries(FOCUSES.map(f => [f.id, f]));
-const AI_FOCUS_MAJOR = ['ind1', 'arm1', 'ind2', 'arm2', 'army1', 'tank', 'army2', 'mob', 'infra', 'logi', 'def1', 'prop', 'def2'];
-const AI_FOCUS_MINOR = ['def1', 'ind1', 'arm1', 'def2', 'mob', 'ind2', 'logi', 'army1', 'arm2', 'infra', 'prop', 'tank', 'army2'];
+// I focus nazionali sono in focus.js (motore) e focustrees.js (alberi).
 
 // Eventi storici. Se l'attore è il giocatore, gli viene chiesto se procedere.
 const EVENTS = [

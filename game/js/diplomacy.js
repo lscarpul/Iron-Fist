@@ -7,25 +7,20 @@
 // Ogni azione è una funzione pura sullo stato S che ritorna { ok, msg }: la usano
 // l'interfaccia, l'IA dei paesi e l'IA testuale (vedi diplo-api.js).
 
-const IDEOLOGIES = {
-  democratic: { name: 'Democrazia', color: '#4a86c4' },
-  fascism: { name: 'Fascismo', color: '#7a5a3a' },
-  communism: { name: 'Comunismo', color: '#b03030' },
-  neutrality: { name: 'Non allineato', color: '#8a8a8a' },
-};
+// IDEOLOGIES (nomi e colori) è in focus.js; chiavi: democratic, fascist, communist, neutral
 const DEFAULT_IDEOLOGY = {
-  G: 'fascism', I: 'fascism', S: 'communism',
+  G: 'fascist', I: 'fascist', S: 'communist',
   U: 'democratic', F: 'democratic', B: 'democratic', D: 'democratic', N: 'democratic', W: 'democratic',
-  K: 'democratic', X: 'neutrality', C: 'democratic', Z: 'democratic',
+  K: 'democratic', X: 'neutral', C: 'democratic', Z: 'democratic',
 };
 
 // Soglie di tensione mondiale (0-100) richieste per ideologia, come in HOI4:
 // le democrazie non possono giustificare guerre finché il mondo non è in fiamme.
 const TENSION_REQ = {
-  justify: { democratic: 80, neutrality: 50, communism: 30, fascism: 0 },
-  faction: { democratic: 40, neutrality: 50, communism: 20, fascism: 0 },
-  guarantee: { democratic: 0, neutrality: 25, communism: 25, fascism: 10 },
-  lendLease: { democratic: 30, neutrality: 30, communism: 0, fascism: 0 },
+  justify: { democratic: 80, neutral: 50, communist: 30, fascist: 0 },
+  faction: { democratic: 40, neutral: 50, communist: 20, fascist: 0 },
+  guarantee: { democratic: 0, neutral: 25, communist: 25, fascist: 10 },
+  lendLease: { democratic: 30, neutral: 30, communist: 0, fascist: 0 },
 };
 const TENSION_GAIN = { justify: 2, justifyMajor: 5, war: 6, warMajor: 12, annex: 8, capitulation: 4, faction: 2, coup: 3, peace: -4 };
 
@@ -70,7 +65,7 @@ const Diplo = {
     S.peaceQueue = [];
     for (const k in S.countries) {
       const c = S.countries[k];
-      c.ideology = c.ideology || DEFAULT_IDEOLOGY[k] || 'neutrality';
+      c.ideology = c.ideology || DEFAULT_IDEOLOGY[k] || 'neutral';
       c.overlord = null;
       c.autonomy = null;      // { level, score } se suddito
       c.capitulated = false;
@@ -78,7 +73,7 @@ const Diplo = {
     }
   },
 
-  ideo(code) { return C(code).ideology || 'neutrality'; },
+  ideo(code) { return C(code).ideology || 'neutral'; },
   worldTension() { return S.tension; },
   addTension(v) { S.tension = Math.max(0, Math.min(100, S.tension + v)); },
   tensionOk(code, kind) { return S.tension >= TENSION_REQ[kind][this.ideo(code)]; },
@@ -99,7 +94,7 @@ const Diplo = {
   baseOpinion(a, b) {
     const ia = this.ideo(a), ib = this.ideo(b);
     let v = 0;
-    if (ia === ib) v += ia === 'neutrality' ? 10 : 25;
+    if (ia === ib) v += ia === 'neutral' ? 10 : 25;
     else {
       const pair = [ia, ib].sort().join('-');
       v += { 'communism-fascism': -50, 'democratic-fascism': -30, 'communism-democratic': -20 }[pair] || 0;
@@ -759,7 +754,7 @@ const Peace = {
     const W = C(w);
     const goals = this.goals(w, conf.loser);
     const pup = opts.find(o => o.type === 'puppet');
-    if (pup && (goals.includes('puppet') || (W.ideology !== 'fascism' && conf.regions.length > 1 && Math.random() < 0.4))) return pup;
+    if (pup && (goals.includes('puppet') || (W.ideology !== 'fascist' && conf.regions.length > 1 && Math.random() < 0.4))) return pup;
     let best = null, bs = -Infinity;
     for (const o of opts) {
       if (o.type !== 'take') continue;

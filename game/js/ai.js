@@ -2,11 +2,7 @@
 
 function aiThink(c) {
   // focus nazionale
-  if (!c.focus) {
-    const order = c.major ? AI_FOCUS_MAJOR : AI_FOCUS_MINOR;
-    const id = order.find(id => focusAvailable(c, FOCUS_BY_ID[id]));
-    if (id) startFocus(c, id);
-  }
+  aiPickFocus(c);
   // economia: leggi, linee di produzione, commercio, cantieri (economy.js)
   Econ.aiThink(c);
   // reclutamento

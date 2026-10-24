@@ -6,7 +6,7 @@ const LandUI = {
   mapMode: null, selTile: -1, focusDiv: null,
 };
 
-const pct = v => `${Math.round(v * 100)}%`;
+const pctAbs = v => `${Math.round(v * 100)}%`; // pctAbs() di focus.js mette il segno
 const n1 = v => (Math.round(v * 10) / 10).toLocaleString('it-IT');
 function supIcon(s) { return s < 0.3 ? '<span class="bad" title="Senza rifornimenti">☠</span>' : s < 0.7 ? '<span class="warn" title="Rifornimenti scarsi">⚠</span>' : ''; }
 function expName(e) { return e < 0.2 ? 'Recluta' : e < 0.45 ? 'Addestrata' : e < 0.7 ? 'Regolare' : e < 0.9 ? 'Veterana' : 'Élite'; }
@@ -17,10 +17,10 @@ function statTable(st, extra = '') {
     <tr><td>Attacco duro</td><td>${n1(st.ha)}</td><td>Sfondamento</td><td>${n1(st.brk)}</td></tr>
     <tr><td>Perforazione</td><td>${n1(st.ap)}</td><td>Corazza</td><td>${n1(st.arm)}</td></tr>
     <tr><td>Organizzazione</td><td>${n1(st.org)}</td><td>Forza (PF)</td><td>${n1(st.hp)}</td></tr>
-    <tr><td>Larghezza</td><td><b>${st.w}</b></td><td>Durezza</td><td>${pct(st.hard)}</td></tr>
+    <tr><td>Larghezza</td><td><b>${st.w}</b></td><td>Durezza</td><td>${pctAbs(st.hard)}</td></tr>
     <tr><td>Velocità</td><td>${n1(st.spd)} km/h</td><td>Rifornimenti</td><td>${st.sup.toFixed(2)}/g</td></tr>
     <tr><td>Manodopera</td><td>${fmt(st.mp)}</td><td>Addestramento</td><td>${st.days} g</td></tr>
-    ${st.relN ? `<tr><td>Affidabilità</td><td class="${st.rel < 0.75 ? 'bad' : st.rel < 0.85 ? 'warn' : 'good'}">${pct(st.rel)}</td><td>Forze speciali</td><td>${st.special}</td></tr>` : st.special ? `<tr><td>Forze speciali</td><td>${st.special} btg</td><td></td><td></td></tr>` : ''}
+    ${st.relN ? `<tr><td>Affidabilità</td><td class="${st.rel < 0.75 ? 'bad' : st.rel < 0.85 ? 'warn' : 'good'}">${pctAbs(st.rel)}</td><td>Forze speciali</td><td>${st.special}</td></tr>` : st.special ? `<tr><td>Forze speciali</td><td>${st.special} btg</td><td></td><td></td></tr>` : ''}
     ${extra}
   </table>
   <p class="hint">Equipaggiamento: ${Object.entries(st.need).map(([f, q]) => `${f} ${fmt(q)}`).join(' · ')}</p>`;
@@ -51,7 +51,7 @@ function landPanelDivisioni(p) {
     h += `<div class="card cur"><div class="row"><b>${esc(divName(one))}</b><small>${expName(one.exp || 0)}</small></div>
       <div class="row3"><small>Org</small>${bar(one.org / maxOrg, 'org')}<small>Forza</small>${bar(one.str, 'str')}</div>
       <div class="row3"><small>Rifornim.</small>${bar(one.supply ?? 1, (one.supply ?? 1) < 0.5 ? 'bad' : '')}<small>Esper.</small>${bar(one.exp || 0)}</div>
-      <p>Trinceramento ${n1(one.ent || 0)}/10 · Pianificazione ${pct(one.plan || 0)} · ${weatherOf(one.tile).icon} ${weatherOf(one.tile).name}</p>
+      <p>Trinceramento ${n1(one.ent || 0)}/10 · Pianificazione ${pctAbs(one.plan || 0)} · ${weatherOf(one.tile).icon} ${weatherOf(one.tile).name}</p>
       <p>Comando: ${a ? esc(a.name) : '<span class="warn">nessuna armata</span>'}${g ? ` · ${esc(g.name)}` : ''}</p>
       ${one.attrition > 0 ? `<p class="bad">Logorio: -${(one.attrition * 100).toFixed(2)}% forza al giorno</p>` : ''}
       ${statTable(st)}</div>`;
@@ -167,7 +167,7 @@ function landPanelCarri(p) {
       <tr><td>Attacco molle</td><td>${st.sa}</td><td>Attacco duro</td><td>${st.ha}</td></tr>
       <tr><td>Perforazione</td><td>${st.ap}</td><td>Corazza</td><td>${st.arm}</td></tr>
       <tr><td>Sfondamento</td><td>${st.brk}</td><td>Difesa</td><td>${st.def}</td></tr>
-      <tr><td>Velocità</td><td>${st.spd} km/h</td><td>Affidabilità</td><td class="${st.rel < 0.75 ? 'bad' : st.rel < 0.85 ? 'warn' : 'good'}">${pct(st.rel)}</td></tr>
+      <tr><td>Velocità</td><td>${st.spd} km/h</td><td>Affidabilità</td><td class="${st.rel < 0.75 ? 'bad' : st.rel < 0.85 ? 'warn' : 'good'}">${pctAbs(st.rel)}</td></tr>
       <tr><td>Costo</td><td>${st.cost}</td><td>Rifornimenti</td><td>${st.sup}</td></tr>
     </table>
     ${err ? `<p class="warn">${esc(err)}</p>` : ''}
@@ -186,7 +186,7 @@ function landPanelComando(p) {
     h += `<div class="card"><div class="row"><b>${esc(a.name)}</b><small class="${divs.length > ARMY_MAX_DIVS ? 'bad' : ''}">${divs.length}/${ARMY_MAX_DIVS} div.</small></div>
       <p>Generale: ${g ? esc(g.name) : '<span class="warn">nessuno</span>'} <button data-act="cycleGen" data-arg="${a.id}">Cambia</button></p>
       <p>Feldmaresciallo: ${fm ? esc(fm.name) : '—'} <button data-act="cycleFM" data-arg="${a.id}">Cambia</button></p>
-      <p>Rifornimenti medi ${pct(sup)} ${supIcon(sup)}</p>
+      <p>Rifornimenti medi ${pctAbs(sup)} ${supIcon(sup)}</p>
       <div class="row2"><button data-act="selArmy" data-arg="${a.id}">Seleziona divisioni</button><button data-act="assignArmy" data-arg="${a.id}" ${selCount ? '' : 'disabled'}>Assegna selezionate (${selCount})</button></div>
       <button class="danger" data-act="disbandArmy" data-arg="${a.id}">Sciogli armata</button></div>`;
   }

@@ -150,6 +150,7 @@ function newGame(player) {
       construction: [], training: [], faction: null, alive: true,
       capital: map.capitals[code], tiles: 0, slot: slot++ % 3, divCounter: 0,
     };
+    initFocusState(c);
     S.countries[code] = c;
     initResearch(c, def);
     if (def.faction) { c.faction = def.faction; S.factions[def.faction].members.push(code); }
@@ -208,7 +209,7 @@ function tick() {
   UI.dirty = true;
 }
 
-function factoryCap(c) { return Math.floor(c.tiles * 0.45) + 12 + c.capBonus; }
+function factoryCap(c) { return Math.floor(c.tiles * 0.45) + 12 + (c.capBonus || 0) + (c.extraSlots || 0); }
 
 function economy(c) {
   c.pp = Math.min(999, c.pp + c.ppGain);
@@ -227,15 +228,7 @@ function economy(c) {
     }
   }
   researchStep(c);
-  if (c.focus) {
-    if (--c.focusDays <= 0) {
-      const f = FOCUS_BY_ID[c.focus];
-      f.apply(c);
-      c.done.add(f.id);
-      c.focus = null;
-      if (isP) log(`Focus nazionale completato: ${f.name}.`, 'good');
-    }
-  }
+  focusDay(c);
 }
 
 function spawnTile(c) {
@@ -248,17 +241,7 @@ function spawnTile(c) {
 function canBuild(c) { return c.civ + c.mil + c.construction.length < factoryCap(c); }
 function queueBuild(c, type) { return Econ.queueBuild(c, type); }
 // canRecruit e recruit: vedi land/divisions.js (modelli di divisione, pagati con Econ)
-function focusAvailable(c, f) {
-  if (c.done.has(f.id) || c.focus === f.id) return false;
-  if (f.req && !f.req.every(r => c.done.has(r) || (r === 'tank' && c.armorTech))) return false;
-  return f.avail ? f.avail(c) : true;
-}
-function startFocus(c, id) {
-  const f = FOCUS_BY_ID[id];
-  if (c.focus || !focusAvailable(c, f)) return false;
-  c.focus = id; c.focusDays = f.days;
-  return true;
-}
+// focusAvailable e startFocus: vedi focus.js (alberi dei focus nazionali)
 
 // ---------- movimento e combattimento: militaryStep e resolveCombat in land/combat.js ----------
 function occupy(t, owner) {

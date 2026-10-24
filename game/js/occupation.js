@@ -138,7 +138,7 @@ const Occupation = {
       const comp = this.avgCompliance(occ, core), resv = this.avgResistance(occ, core);
       const st = S.occStats[occ];
       let want = 'militare';
-      if (c.ideology === 'fascism' && resv > 60 && st && st.eff > 0.9) want = 'pugno';
+      if (c.ideology === 'fascist' && resv > 60 && st && st.eff > 0.9) want = 'pugno';
       else if (comp >= OCC_LAWS.civile.req) want = 'civile';
       else if (comp >= OCC_LAWS.polizia.req) want = 'polizia';
       if (this.law(occ, core) !== want) this.setLaw(occ, core, want);

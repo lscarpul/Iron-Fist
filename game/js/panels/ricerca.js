@@ -5,7 +5,7 @@
 
 const RS = { view: 'tech', cat: 'infantry' };
 
-const pct = v => `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`;
+// pct() è in focus.js
 const rsTag = (txt, cls = '') => `<span class="tag ${cls}">${txt}</span>`;
 
 function rsViewButtons() {
