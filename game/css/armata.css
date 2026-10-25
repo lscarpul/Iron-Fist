@@ -1,0 +1,51 @@
+/* Barra delle armate (stile HOI4) e strumenti dei piani di battaglia */
+#armybar {
+  position: absolute; z-index: 13; left: 10px; bottom: 10px; max-width: calc(100vw - 650px);
+  display: flex; align-items: flex-end; gap: 8px; padding: 6px; overflow-x: auto;
+  background: rgba(14, 17, 15, .92); border: 1px solid var(--edge); box-shadow: inset 0 0 0 1px rgba(201, 165, 90, .18), var(--shadow);
+}
+#game.has-armybar #unitbar { bottom: calc(var(--armybar-h, 150px) + 18px); }
+.ab-cp { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.ab-cp b { font: 500 18px Oswald, sans-serif; color: var(--brass-hi); }
+.ab-grp { flex: none; display: flex; flex-direction: column; gap: 3px; }
+.ab-fm { display: flex; align-items: center; gap: 6px; font: 500 12px Oswald, sans-serif; color: var(--brass); white-space: nowrap; }
+.ab-fm small { color: var(--muted); }
+.ab-fm.bad small { color: var(--red); }
+.ab-fm button { padding: 0 6px; height: 18px; font-size: 10px; }
+.ab-cards { display: flex; gap: 4px; }
+.ab-card {
+  position: relative; flex: none; width: 92px; padding: 4px 5px 5px; cursor: pointer; text-align: center; border-radius: 2px;
+  background: linear-gradient(#2f3732, #1c221f); border: 1px solid #070807; border-top: 3px solid var(--ac, var(--brass-lo));
+}
+.ab-card:hover { border-color: var(--brass-lo); border-top-color: var(--ac, var(--brass-lo)); }
+.ab-card.sel { box-shadow: 0 0 0 2px #ffe14d; }
+.ab-card.exec { background: linear-gradient(#3b2f26, #221a15); }
+.ab-card.drop { box-shadow: 0 0 0 2px var(--green); }
+.ab-tools, .ab-abil { display: flex; justify-content: center; gap: 2px; }
+.ab-tools button, .ab-abil button { width: 20px; height: 20px; padding: 0; font-size: 11px; line-height: 1; display: grid; place-items: center; }
+.ab-tools button.set { color: var(--ac, var(--brass-hi)); }
+.ab-tools button.on, .ab-abil button.on { background: linear-gradient(#a8853d, #6d5323); color: #fff; }
+.ab-por {
+  position: relative; width: 38px; height: 38px; margin: 4px auto 2px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 40% 35%, #59615a, #232925); border: 2px solid var(--ac, var(--brass-lo));
+  font: 600 14px Oswald, sans-serif; color: var(--text);
+}
+.ab-por i { position: absolute; right: -5px; bottom: -3px; min-width: 15px; height: 15px; border-radius: 8px; background: #111; border: 1px solid var(--brass-lo); font: 600 9px/13px Inter, sans-serif; color: var(--brass-hi); font-style: normal; }
+.ab-name { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ab-n { font-size: 10px; color: var(--muted); }
+.ab-n.bad { color: var(--red); font-weight: 700; }
+.ab-bars { height: 4px; margin: 2px 0; background: #111; }
+.ab-bars span { display: block; height: 100%; background: #5fd35f; }
+.ab-bars.plan span { background: #3ddc84; }
+.ab-new { align-self: stretch; display: flex; flex-direction: column; justify-content: center; color: var(--muted); border-top-color: var(--steel-4); }
+.ab-new .ab-por { font-size: 22px; color: var(--brass); }
+#maptool-hint {
+  position: absolute; z-index: 14; top: calc(var(--topbar-h) + var(--alerts-h) + 14px); left: 50%; transform: translateX(-50%);
+  padding: 6px 14px; background: rgba(14, 17, 15, .94); border: 1px solid var(--brass-lo); color: var(--brass-hi); font-size: 13px; white-space: nowrap;
+}
+#maptool-hint small { color: var(--muted); }
+#map.drawing { cursor: crosshair; }
+@media (max-width: 1100px) {
+  #armybar { max-width: calc(100vw - 20px); bottom: 96px; }
+  #game.has-armybar #unitbar { bottom: calc(var(--armybar-h, 150px) + 104px); }
+}

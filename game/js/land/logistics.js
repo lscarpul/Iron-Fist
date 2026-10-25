@@ -233,6 +233,9 @@ function divSupplyUse(d) {
   let u = st.sup;
   const g = divGeneral(d);
   if (g && g.traits.includes('logistica')) u *= 0.85;
+  // statistica Logistica: -3% di consumo per punto del generale, -1,5% per il feldmaresciallo
+  const fm = divFM(d);
+  u *= 1 - 0.03 * (g ? g.log || 0 : 0) - 0.015 * (fm ? fm.log || 0 : 0);
   if (typeof unitMod === 'function') u *= 1 + (unitMod(C(d.owner), st.kind, 'supply') || 0);
   return u;
 }

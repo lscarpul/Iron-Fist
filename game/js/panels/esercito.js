@@ -43,7 +43,7 @@ function landPanelDivisioni(p) {
   const selDivs = mine.filter(d => sel.has(d.id));
   const paras = selDivs.filter(d => isParaDiv(d));
   if (paras.length) h += `<button data-act="paradrop" class="${LandUI.paradrop ? 'primary' : ''}">${LandUI.paradrop ? 'Clicca la zona di lancio sulla mappa…' : `🪂 Aviolancio (${paras.length})`}</button>`;
-  h += `<p class="hint">${sel.size ? `<b>${sel.size}</b> selezionate: clic destro sulla mappa per muovere o attaccare.` : 'Clic su un segnalino per selezionare, Shift+trascina per un riquadro.'}</p>`;
+  h += `<p class="hint">${sel.size ? `<b>${sel.size}</b> selezionate: clic destro sulla mappa per muovere o attaccare (Ctrl+clic destro: in treno).` : 'Clic su un segnalino per selezionare, trascina col sinistro per un riquadro, Ctrl+numero per un gruppo di controllo.'}</p>`;
   const one = selDivs.length === 1 ? selDivs[0] : null;
   if (one) {
     const st = tplStats(one), g = divGeneral(one), a = one.army != null ? armyById(p, one.army) : null;
@@ -177,7 +177,8 @@ function landPanelCarri(p) {
 
 function landPanelComando(p) {
   let h = `<div class="row"><b>Potere di comando</b><span>${Math.floor(p.cp)}/${cpMax(p)}</span></div>${bar(p.cp / cpMax(p))}
-    <p class="hint">Si accumula ogni giorno (di più con i feldmarescialli). Serve per nuovi generali (${CP_COST.general}), promozioni a feldmaresciallo (${CP_COST.promote}) e nuovi tratti (${CP_COST.trait}).</p>
+    <p class="hint">Si accumula ogni giorno (di più con i feldmarescialli), fino a ${cpMax(p)}. Serve per nuovi generali (${CP_COST.general}), promozioni a feldmaresciallo (${CP_COST.promote}), nuovi tratti (${CP_COST.trait}) e per le manovre d'emergenza sui ritratti in basso: ${CP_ABILITY.force.icon} ${CP_ABILITY.force.name} (${CP_ABILITY.force.cost}) e ${CP_ABILITY.last.icon} ${CP_ABILITY.last.name} (${CP_ABILITY.last.cost}).</p>
+    <p class="hint">Le divisioni ricevono il 100% dei bonus del generale e il 50% di quelli del feldmaresciallo (che coordina fino a ${FM_MAX_ARMIES} armate). Oltre ${ARMY_MAX_DIVS} divisioni per armata i bonus si diluiscono e arriva un malus fino al -30%.</p>
     <h4>Armate (max ${ARMY_MAX_DIVS} divisioni per generale)</h4>`;
   const selCount = UI.sel.size;
   for (const a of p.armies) {
@@ -185,7 +186,8 @@ function landPanelComando(p) {
     const sup = divs.length ? divs.reduce((s, d) => s + (d.supply ?? 1), 0) / divs.length : 1;
     h += `<div class="card"><div class="row"><b>${esc(a.name)}</b><small class="${divs.length > ARMY_MAX_DIVS ? 'bad' : ''}">${divs.length}/${ARMY_MAX_DIVS} div.</small></div>
       <p>Generale: ${g ? esc(g.name) : '<span class="warn">nessuno</span>'} <button data-act="cycleGen" data-arg="${a.id}">Cambia</button></p>
-      <p>Feldmaresciallo: ${fm ? esc(fm.name) : '—'} <button data-act="cycleFM" data-arg="${a.id}">Cambia</button></p>
+      <p>Feldmaresciallo: ${fm ? `${esc(fm.name)}${fmArmyCount(p, fm.id) > FM_MAX_ARMIES ? ` <span class="bad">(${fmArmyCount(p, fm.id)}/${FM_MAX_ARMIES} armate)</span>` : ''}` : '—'} <button data-act="cycleFM" data-arg="${a.id}">Cambia</button></p>
+      ${a.plan ? `<p>Piano: fronte di ${a.plan.front.length} province${a.plan.off.length ? ' · offensiva' : ''}${a.plan.exec ? ' · <span class="good">in esecuzione</span>' : ''}</p>` : ''}
       <p>Rifornimenti medi ${pctAbs(sup)} ${supIcon(sup)}</p>
       <div class="row2"><button data-act="selArmy" data-arg="${a.id}">Seleziona divisioni</button><button data-act="assignArmy" data-arg="${a.id}" ${selCount ? '' : 'disabled'}>Assegna selezionate (${selCount})</button></div>
       <button class="danger" data-act="disbandArmy" data-arg="${a.id}">Sciogli armata</button></div>`;
@@ -196,7 +198,7 @@ function landPanelComando(p) {
     <h4>Generali</h4>`;
   for (const g of p.generals) {
     const cmd = p.armies.filter(a => a.general === g.id || a.fm === g.id).map(a => a.name);
-    const free = Object.keys(GENERAL_TRAITS).filter(t => !g.traits.includes(t));
+    const free = Object.keys(GENERAL_TRAITS).filter(t => !g.traits.includes(t) && (!GENERAL_TRAITS[t].fm || g.rank === 'fm'));
     h += `<div class="card"><div class="row"><b>${g.rank === 'fm' ? '★ ' : ''}${esc(g.name)}</b><small>${g.rank === 'fm' ? 'Feldmaresciallo' : 'Generale'} · liv. ${g.level}</small></div>
       <p>Attacco ${g.atk} · Difesa ${g.def} · Pianificazione ${g.plan} · Logistica ${g.log}</p>
       ${bar(g.xp / (100 * g.level))}
@@ -299,7 +301,7 @@ const ESERCITO_ACTIONS = {
     promote(arg) { promoteGeneral(C(S.player), +arg); },
     trait(arg) {
       const p = C(S.player), g = genById(p, +arg);
-      const free = Object.keys(GENERAL_TRAITS).filter(t => !g.traits.includes(t));
+      const free = Object.keys(GENERAL_TRAITS).filter(t => !g.traits.includes(t) && (!GENERAL_TRAITS[t].fm || g.rank === 'fm'));
       addTrait(p, g.id, free[(LandUI.traitIdx || 0) % free.length]);
     },
     nextTrait() { LandUI.traitIdx = (LandUI.traitIdx || 0) + 1; },

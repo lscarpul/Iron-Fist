@@ -103,7 +103,7 @@ function battleAttack(d, tgt, ti, attacking, info) {
   let a = (st.sa * (1 - hardT) + st.ha * hardT) * d.str * lm.atk;
   const ter = terrainOf(ti), tt = S.tiles[ti];
   if (attacking) {
-    let pen = Math.min(0, ter.atk - (st.mods.terrainPen || 0));
+    let pen = Math.min(0, ter.atk - (st.mods.terrainPen || 0) + lm.cm.terrainPen);
     a *= 1 + pen;
     if (st.kind === 'arm') a *= 0.5 + 0.5 * ter.tank;
     a *= 1 + (d.plan || 0);
@@ -160,13 +160,18 @@ function resolveCombat(ti, atkAll) {
   // intelligence: decrittazione e reti nel paese nemico
   info.aMul = typeof Intel !== 'undefined' ? Intel.combatMod(a0, info.def) : 1;
   info.dMul = typeof Intel !== 'undefined' ? Intel.combatMod(info.def, a0) : 1;
+  // attacco da più direzioni (multi-prong): oltre alla larghezza in più, +5% per direzione (max +15%)
+  info.prong = 1 + 0.05 * Math.min(3, dirs - 1);
+  info.aMul *= info.prong;
   for (const d of A.front) info.aOrg0 += d.org;
   for (const d of D.front) info.dOrg0 += d.org;
   const hp = d => Math.max(1, landMods(d).st.hp);
-  const alive = d => !d.dead && d.org > 0 && d.str > 0.05;
+  // Attacco forzato e Ultima resistenza: si combatte anche senza organizzazione
+  const aliveA = d => !d.dead && d.str > 0.05 && (d.org > 0 || divAbility(d) === 'force');
+  const aliveD = d => !d.dead && d.str > 0.05 && (d.org > 0 || divAbility(d) === 'last');
 
   for (let h = 0; h < HOURS_PER_DAY; h++) {
-    const af = A.front.filter(alive), df = D.front.filter(alive);
+    const af = A.front.filter(aliveA), df = D.front.filter(aliveD);
     if (!af.length || !df.length) break;
     // attaccanti → difensori
     hourAttacks(af, df, ti, true, info, hp);
@@ -197,10 +202,10 @@ function resolveCombat(ti, atkAll) {
     }
   }
   // i difensori senza organizzazione si ritirano uno per uno
-  for (const d of defs) if (!d.dead && d.org <= 0.5) retreat(d);
+  for (const d of defs) if (!d.dead && d.org <= 0.5 && divAbility(d) !== 'last') retreat(d);
   // gli attaccanti esausti interrompono l'attacco
   for (const d of atk) {
-    if (!d.dead && d.org < divMaxOrg(d) * 0.1) {
+    if (!d.dead && d.org < divMaxOrg(d) * 0.1 && divAbility(d) !== 'force') {
       d.path = []; d.prog = 0;
       if (d.owner === S.player) log(`${divName(d)} ha interrotto l'attacco: organizzazione esaurita.`, 'warn');
     }
@@ -229,6 +234,7 @@ function hourAttacks(src, tgts, ti, attacking, info, hp) {
     let org = rollDice(hits, orgDie) * ORG_DMG_K, str = rollDice(hits, 2) * STR_DMG_K;
     if (tgtArmored) { org *= 0.5; str *= 0.5; }
     if (ts.mods.casualties) str *= 1 + ts.mods.casualties * 0.5;
+    if (tgt.org <= 0) str *= 2; // chi combatte senza organizzazione (Attacco forzato, Ultima resistenza) paga in uomini e mezzi
     tgt.org = Math.max(0, tgt.org - org);
     tgt.str = Math.max(0, tgt.str - str / hp(tgt));
     info.hits[attacking ? 0 : 1] += hits;
@@ -254,8 +260,9 @@ function militaryStep() {
     const nx = d.path[0], t = S.tiles[nx];
     if (!passable(d.owner, t)) { d.path = []; d.prog = 0; continue; }
     d.ent = 0;
+    if (d.strat && (!t.land || !allied(t.ctrl, d.owner) || hasHostile(nx, d.owner))) d.strat = false;
     if (t.land && hasHostile(nx, d.owner)) {
-      if (d.org < divMaxOrg(d) * 0.15) {
+      if (d.org < divMaxOrg(d) * 0.15 && divAbility(d) !== 'force') {
         d.path = []; d.prog = 0;
         if (d.owner === S.player) log(`${divName(d)} ha interrotto l'attacco: organizzazione esaurita.`, 'warn');
         continue;
@@ -266,6 +273,17 @@ function militaryStep() {
       continue;
     }
     d.plan = Math.max(0, (d.plan || 0) - 0.05);
+    if (d.strat) {
+      // in treno si percorrono più province al giorno, solo in territorio amico
+      d.prog += stratSpeed(d.tile, nx);
+      while (d.prog >= 1 && d.path.length) {
+        const to = d.path[0], tt = S.tiles[to];
+        if (!tt.land || !allied(tt.ctrl, d.owner) || hasHostile(to, d.owner)) { d.strat = false; d.prog = 0; break; }
+        d.prog -= 1; d.path.shift(); moveDiv(d, to);
+      }
+      if (!d.path.length) { d.strat = false; d.prog = 0; }
+      continue;
+    }
     d.prog += t.land ? speedOf(d, nx) / TERRAIN[t.terrain]?.cost || speedOf(d, nx) : SEA_SPEED;
     if (d.prog >= 1) {
       d.prog = 0;
@@ -310,11 +328,13 @@ function recover(d) {
   // l'organizzazione si recupera solo se arrivano rifornimenti
   const supF = sup < 0.3 ? 0 : Math.min(1, (sup - 0.3) / 0.6);
   const rb = 1 + (c.recBonus || 0);
+  if (d.strat) { d.org = 0; return; } // in trasferimento strategico (treno): niente organizzazione
   d.org = Math.min(maxOrg, d.org + (moving ? 2 : 6) * rb * supF);
   if (!moving) {
     d.ent = Math.min(10, (d.ent || 0) + 1 + (st.mods.entrench || 0) * 0.5 + lm.cm.entrench);
     const g = divGeneral(d);
-    const pmax = (c.planMax ?? 0.30) + lm.cm.plan;
+    // il giocatore accumula pianificazione solo sulla linea del fronte di un piano di battaglia (come in HOI4)
+    const pmax = d.owner === S.player && !onBattlePlan(d) ? 0 : (c.planMax ?? 0.30) + lm.cm.plan;
     const speed = 0.03 * (g ? 1 + lm.cm.planSpeed : 0.5) * (1 + (st.mods.planning || 0));
     d.plan = Math.min(pmax, (d.plan || 0) + speed);
   }

@@ -92,7 +92,16 @@ const UI = {
     $('panel-head').addEventListener('click', e => { if (e.target.closest('[data-close]')) this.close(); });
     $('unitbar').addEventListener('click', e => {
       const b = e.target.closest('[data-div]');
-      if (b) this.act('selDiv', b.dataset.div);
+      if (!b) return;
+      // Shift/Ctrl+clic toglie (o rimette) una singola divisione dalla selezione
+      if (e.shiftKey || e.ctrlKey) { const id = +b.dataset.div; this.sel.has(id) ? this.sel.delete(id) : this.sel.add(id); this.dirty = true; }
+      else this.act('selDiv', b.dataset.div);
+    });
+    // trascina le divisioni selezionate (dalla barra in basso) su un'armata
+    $('unitbar').addEventListener('dragstart', e => {
+      if (!this.sel.size) return e.preventDefault();
+      e.dataTransfer.setData('text/x-divs', [...this.sel].join(','));
+      e.dataTransfer.effectAllowed = 'move';
     });
     $('alerts').addEventListener('click', e => {
       const b = e.target.closest('[data-alert]'); if (!b) return;
@@ -136,8 +145,21 @@ const UI = {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
     if (typing) { if (e.code === 'Escape') document.activeElement.blur(); return; }
     if (e.code === 'Space') { e.preventDefault(); this.setSpeed(S.paused ? S.speed : 0); }
-    else if (/^Digit[1-5]$/.test(e.code)) this.setSpeed(+e.code.slice(5));
-    else if (e.code === 'Escape') { if (this.sel.size) this.sel.clear(); else this.close(); this.dirty = true; }
+    // velocità: + e - (i numeri sono i gruppi di controllo, come in HOI4)
+    else if (e.code === 'Equal' || e.code === 'NumpadAdd') this.setSpeed(Math.min(5, (S.paused ? 0 : S.speed) + 1));
+    else if (e.code === 'Minus' || e.code === 'NumpadSubtract') this.setSpeed(S.paused || S.speed <= 1 ? 0 : S.speed - 1);
+    else if (/^(Digit|Numpad)[0-9]$/.test(e.code)) { e.preventDefault(); this.ctrlGroup(+e.code.slice(-1), e.ctrlKey || e.metaKey); }
+    else if (/^Arrow/.test(e.code)) {
+      e.preventDefault();
+      const k = 120, v = Render.view;
+      if (e.code === 'ArrowLeft') v.tx += k; else if (e.code === 'ArrowRight') v.tx -= k;
+      else if (e.code === 'ArrowUp') v.ty += k; else v.ty -= k;
+    }
+    else if (e.code === 'Escape') {
+      if (this.mapTool) this.setMapTool(null);
+      else if (this.sel.size) this.sel.clear(); else this.close();
+      this.dirty = true;
+    }
     else if (e.code === 'KeyA' && e.ctrlKey) { e.preventDefault(); this.act('selAll'); }
     else if (!e.ctrlKey && !e.altKey) {
       const p = Object.values(this.panels).find(p => p.key && 'Key' + p.key === e.code);
@@ -155,22 +177,26 @@ const UI = {
       const [x, y] = pos(e);
       Render.zoomAt(x, y, e.deltaY < 0 ? 1.15 : 1 / 1.15);
     }, { passive: false });
+    // sinistro: clic seleziona, trascina = riquadro di selezione (come in HOI4); destro o centrale trascinati spostano la mappa;
+    // clic destro = muovi/attacca (Ctrl+clic destro = trasferimento in treno). Con UI.mapTool attivo il sinistro va allo strumento.
     cv.addEventListener('mousedown', e => {
       const [x, y] = pos(e);
-      if (e.button === 2) {
-        const ti = Render.tileAt(x, y);
-        if (ti >= 0 && this.sel.size) orderMove(S.divs.filter(d => this.sel.has(d.id) && !d.dead), ti);
+      if (e.button === 0 && this.mapTool) {
+        drag = { tool: true, x0: x, y0: y, moved: false };
+        this.mapTool.down && this.mapTool.down(Render.tileAt(x, y), e);
         return;
       }
-      if (e.button !== 0) return;
-      drag = { x0: x, y0: y, tx: Render.view.tx, ty: Render.view.ty, moved: false, box: e.shiftKey };
+      if (e.button > 2) return;
+      if (e.button === 1) e.preventDefault(); // niente scorrimento automatico del browser
+      drag = { button: e.button, x0: x, y0: y, tx: Render.view.tx, ty: Render.view.ty, moved: false, box: e.button === 0 };
     });
     window.addEventListener('mousemove', e => {
       if (!S) return;
       const [x, y] = pos(e);
       if (drag) {
         if (Math.abs(x - drag.x0) + Math.abs(y - drag.y0) > 4) drag.moved = true;
-        if (drag.moved) {
+        if (drag.tool) { if (drag.moved && this.mapTool && this.mapTool.move) this.mapTool.move(Render.tileAt(x, y), e); }
+        else if (drag.moved) {
           if (drag.box) Render.box = { x0: drag.x0, y0: drag.y0, x1: x, y1: y };
           else { Render.view.tx = drag.tx + x - drag.x0; Render.view.ty = drag.ty + y - drag.y0; }
         }
@@ -187,15 +213,40 @@ const UI = {
       } else tip.classList.add('hidden');
     });
     window.addEventListener('mouseup', e => {
-      if (!drag || e.button !== 0) return;
+      if (!drag) return;
       const [x, y] = pos(e);
+      if (drag.tool) {
+        if (e.button !== 0) return;
+        const tool = this.mapTool;
+        drag = null;
+        if (tool && tool.up) tool.up(Render.tileAt(x, y), e);
+        this.dirty = true;
+        return;
+      }
+      if (e.button !== drag.button) return;
+      if (drag.button !== 0) {
+        // clic destro senza trascinare: ordine di movimento o attacco
+        if (!drag.moved && drag.button === 2 && e.target === cv) {
+          const ti = Render.tileAt(x, y);
+          if (this.mapTool) this.setMapTool(null);
+          else if (ti >= 0 && this.sel.size) {
+            const n = orderMove(S.divs.filter(d => this.sel.has(d.id) && !d.dead), ti, { rail: e.ctrlKey });
+            if (e.ctrlKey && n) log(`${n} divisioni in trasferimento strategico (treno): organizzazione a zero fino all'arrivo.`);
+          }
+        }
+        drag = null;
+        this.dirty = true;
+        return;
+      }
       if (drag.box && drag.moved) {
         const [ax, ay] = Render.toWorld(Math.min(drag.x0, x), Math.min(drag.y0, y));
         const [bx, by] = Render.toWorld(Math.max(drag.x0, x), Math.max(drag.y0, y));
-        if (!e.ctrlKey) this.sel.clear();
+        if (!e.ctrlKey && !e.shiftKey) this.sel.clear();
+        // con la mappa che si richiude (wrapX) il riquadro può cadere su una copia della mappa
+        const offs = MAP_DATA.wrapX ? [-Render.ww, 0, Render.ww] : [0];
         for (const d of S.divs) {
           const t = S.tiles[d.tile];
-          if (d.owner === S.player && t.cx >= ax && t.cx <= bx && t.cy >= ay && t.cy <= by) this.sel.add(d.id);
+          if (d.owner === S.player && !d.dead && t.cy >= ay && t.cy <= by && offs.some(o => t.cx + o >= ax && t.cx + o <= bx)) this.sel.add(d.id);
         }
       } else if (!drag.moved) {
         this.clickTile(Render.tileAt(x, y), e.ctrlKey || e.shiftKey);
@@ -205,6 +256,32 @@ const UI = {
       this.dirty = true;
     });
     window.addEventListener('resize', () => { if (S) Render.resize(); });
+  },
+
+  // gruppi di controllo: Ctrl+numero salva la selezione, numero la richiama, due volte centra la camera
+  ctrlGroup(n, save) {
+    const G = S.ctrlGroups || (S.ctrlGroups = {});
+    if (save) {
+      G[n] = [...this.sel];
+      log(this.sel.size ? `Gruppo ${n}: ${this.sel.size} divisioni.` : `Gruppo ${n} svuotato.`);
+      this.dirty = true;
+      return;
+    }
+    const divs = (G[n] || []).map(id => S.divs.find(d => d.id === id)).filter(d => d && !d.dead);
+    G[n] = divs.map(d => d.id);
+    if (!divs.length) return;
+    const now = performance.now(), again = this.lastGroup && this.lastGroup.n === n && now - this.lastGroup.t < 450;
+    this.lastGroup = { n, t: now };
+    this.sel = new Set(G[n]);
+    if (again) Render.centerOn(groupCenterTile(divs));
+    this.dirty = true;
+  },
+  // strumento di disegno sulla mappa (piani di battaglia ecc.): { hint, down(ti,e), move(ti,e), up(ti,e), cancel() }
+  setMapTool(tool) {
+    if (this.mapTool && this.mapTool !== tool && this.mapTool.cancel) this.mapTool.cancel();
+    this.mapTool = tool || null;
+    $('map').classList.toggle('drawing', !!tool);
+    this.dirty = true;
   },
 
   clickTile(ti, add) {
@@ -354,9 +431,9 @@ const UI = {
     const divs = S.divs.filter(d => this.sel.has(d.id) && !d.dead);
     let h = '';
     if (divs.length) {
-      h = `<span class="ucount">${divs.length} ${divs.length === 1 ? 'divisione' : 'divisioni'}</span>` + divs.slice(0, 40).map(d => {
+      h = `<span class="ucount" draggable="true" title="Trascina su un'armata per assegnare">${divs.length} ${divs.length === 1 ? 'divisione' : 'divisioni'}</span>` + divs.slice(0, 40).map(d => {
         const ut = UNIT_TYPES[d.type];
-        return `<button class="ucard ${d.combat ? 'fight' : ''}" data-div="${d.id}" title="${esc(divName(d))}">
+        return `<button class="ucard ${d.combat ? 'fight' : ''}" draggable="true" data-div="${d.id}" title="${esc(divName(d))}">
           <span class="uh">${icon(d.type === 'arm' ? 'tank' : 'division', 13)}${esc(divName(d))}</span>
           ${bar(d.org / (typeof divMaxOrg === 'function' ? divMaxOrg(d) : ut.org), 'org')}${bar(d.str, 'str')}</button>`;
       }).join('');
@@ -467,10 +544,12 @@ UI.registerTopStat({ id: 'divisioni', order: 70, icon: 'division', title: 'Divis
 
 const HELP_HTML = `
 <ul class="help">
-<li><b>Tempo</b>: Spazio = pausa, tasti 1–5 = velocità.</li>
+<li><b>Tempo</b>: Spazio = pausa, tasti + e − = velocità.</li>
 <li><b>Schede</b>: i bottoni in alto aprono i pannelli (Politica Q, Ricerca W, Diplomazia E, Commercio R, Costruzione T, Produzione Y, Esercito U, Logistica I, Intelligence O, Focus F). Esc chiude.</li>
-<li><b>Mappa</b>: trascina per spostarti, rotella per lo zoom. Clic su un paese per la diplomazia.</li>
-<li><b>Divisioni</b>: clic sul segnalino per selezionare (Ctrl/Shift+clic per aggiungere, Shift+trascina per un riquadro). <b>Clic destro</b> su un territorio per muovere o attaccare.</li>
+<li><b>Mappa</b>: trascina col tasto destro o centrale (o usa le frecce) per spostarti, rotella per lo zoom. Clic su un paese per la diplomazia.</li>
+<li><b>Divisioni</b>: clic sul segnalino per selezionare, trascina col sinistro per un riquadro, Shift+clic per aggiungere o togliere. <b>Clic destro</b> su un territorio per muovere o attaccare (da più province insieme = attacco da più direzioni), <b>Ctrl+clic destro</b> per il trasferimento in treno.</li>
+<li><b>Gruppi di controllo</b>: Ctrl+numero (1–0) salva la selezione, il numero la richiama, premuto due volte centra la camera.</li>
+<li><b>Armate</b>: in basso, «+» assegna le divisioni selezionate a un generale (o trascinale sul ritratto). Disegna la linea del fronte e la freccia d'offensiva, poi ▶ Esegui piano. Ferme sul fronte, le divisioni accumulano il bonus di pianificazione (barra verde).</li>
 <li><b>Combattimento</b>: entrare in un territorio nemico occupato da truppe avvia una battaglia. Vince chi esaurisce prima l'organizzazione del nemico; serve circa il doppio della forza per sfondare. Montagne e foreste aiutano il difensore.</li>
 <li><b>Accerchiamento</b>: le divisioni sconfitte senza ritirata sicura vengono distrutte.</li>
 <li><b>Mare</b>: le divisioni possono attraversare il mare (lentamente) e sbarcare, con metà dell'attacco.</li>
