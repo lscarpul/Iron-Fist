@@ -51,6 +51,10 @@ function powerOf(code) {
   return p + C(code).mil * 0.5;
 }
 
+class DiploAsk extends Error {
+  constructor(who, rule, reason) { super('DiploAsk'); this.who = who; this.rule = rule; this.reason = reason; }
+}
+
 const Diplo = {
   // ---------- stato ----------
   init() {
@@ -74,6 +78,17 @@ const Diplo = {
   },
 
   ideo(code) { return C(code).ideology || 'neutral'; },
+  // Decisione di un paese su una proposta. Di norma vale la regola (rule). Il Governo testuale può
+  // farla prendere all'IA di quel paese: con verdict = 'ask' la proposta si ferma qui (lanciando
+  // DiploAsk con il parere delle regole), poi viene rifatta con verdict = true/false.
+  verdict: null,
+  decide(rule, who, reason) {
+    if (this.verdict === 'ask') { this.asked = { who, rule, reason }; throw new DiploAsk(who, rule, reason); }
+    if (this.verdict === true || this.verdict === false) return this.verdict;
+    return rule;
+  },
+  // motivo numerico di un rifiuto, omesso quando a decidere è stata l'IA del paese
+  why(text) { return this.verdict === false ? '' : ` (${text})`; },
   worldTension() { return S.tension; },
   addTension(v) { S.tension = Math.max(0, Math.min(100, S.tension + v)); },
   tensionOk(code, kind) { return S.tension >= TENSION_REQ[kind][this.ideo(code)]; },
@@ -259,7 +274,7 @@ const Diplo = {
     if (!sharedEnemy && !this.tensionOk(target, 'faction')) return res(false, `${t.name} non entra in fazioni con tensione mondiale sotto il ${TENSION_REQ.faction[t.ideology]}%.`);
     if (!this.spend(inviter, DIPLO_COST.faction)) return this.needPP(DIPLO_COST.faction);
     const score = this.factionScore(target, inviter);
-    if (score < 30) return res(false, `${t.name} ha rifiutato l'invito (valutazione ${score}, serve 30).`);
+    if (!this.decide(score >= 30, target, `valutazione ${score} su 30 richiesti (opinione, ideologia, nemici comuni)`)) return res(false, `${t.name} ha rifiutato l'invito${this.why(`valutazione ${score}, serve 30`)}.`);
     joinFaction(target, p.faction);
     this.addTension(TENSION_GAIN.faction);
     return res(true, `${t.name} entra in ${S.factions[p.faction].name}.`);
@@ -275,7 +290,7 @@ const Diplo = {
     if (!this.spend(code, DIPLO_COST.faction)) return this.needPP(DIPLO_COST.faction);
     const score = this.opinion(f.leader, code) + (this.ideo(f.leader) === p.ideology ? 20 : 0) + (p.major ? -20 : 10)
       + (enemiesOf(code).some(x => f.members.some(m => atWar(m, x))) ? 60 : 0);
-    if (score < 20) return res(false, `${f.name} ha respinto la richiesta (valutazione ${score}, serve 20).`);
+    if (!this.decide(score >= 20, f.leader, `valutazione ${score} su 20 richiesti (opinione, ideologia, nemici comuni)`)) return res(false, `${f.name} ha respinto la richiesta${this.why(`valutazione ${score}, serve 20`)}.`);
     joinFaction(code, f.id);
     this.addTension(TENSION_GAIN.faction);
     return res(true, `Sei entrato in ${f.name}.`);
@@ -298,7 +313,7 @@ const Diplo = {
     if (!this.spend(a, DIPLO_COST.nap)) return this.needPP(DIPLO_COST.nap);
     const score = this.opinion(b, a) + (S.wargoals.some(w => w.by === b && w.vs === a) ? -50 : 0)
       + (powerOf(a) > powerOf(b) * 1.5 ? 25 : 0) + (enemiesOf(b).length ? 20 : 0);
-    if (score < 0) return res(false, `${C(b).name} rifiuta il patto (valutazione ${score}, serve 0).`);
+    if (!this.decide(score >= 0, b, `valutazione ${score} su 0 richiesti (opinione, forza relativa, obiettivi di guerra)`)) return res(false, `${C(b).name} rifiuta il patto${this.why(`valutazione ${score}, serve 0`)}.`);
     S.naps.push({ a, b, since: S.day });
     S.wargoals = S.wargoals.filter(w => !((w.by === a && w.vs === b) || (w.by === b && w.vs === a)));
     log(`Patto di non aggressione tra ${C(a).name} e ${C(b).name}.`, involvesPlayer(a, b) ? 'good' : '');
@@ -324,7 +339,14 @@ const Diplo = {
     if (!this.spend(a, DIPLO_COST.demand)) return this.needPP(DIPLO_COST.demand);
     const protectors = membersOf(b).filter(m => m !== b).concat(S.guarantees.filter(g => g.to === b && g.by !== a && C(g.by).alive).map(g => g.by));
     const ratio = powerOf(a) / Math.max(1, powerOf(b));
-    if (protectors.length || ratio < 3) {
+    const forced = !protectors.length && ratio >= 3;
+    // l'IA del paese può resistere a una pretesa che le regole accetterebbero, non cedere a una impossibile
+    if (forced && !this.decide(true, b, `rapporto di forze ${ratio.toFixed(1)}:1 e nessun protettore: secondo le regole cederebbe`)) {
+      this.addRel(b, a, -30);
+      this.addTension(2);
+      return res(false, `${B.name} respinge la pretesa nonostante tutto.`);
+    }
+    if (!forced) {
       this.addRel(b, a, -30);
       this.addTension(2);
       return res(false, `${B.name} respinge la pretesa (${protectors.length ? 'ha protettori: ' + protectors.map(x => C(x).name).join(', ') : `rapporto di forze ${ratio.toFixed(1)}:1, serve 3:1`}).`);
@@ -370,9 +392,9 @@ const Diplo = {
     const F = C(from);
     const op = this.opinion(from, to);
     const shared = enemiesOf(to).some(x => atWar(x, from) || enemiesOf(from).length === 0 && this.opinion(from, x) < -20);
-    if (op < 25 && !(allied(from, to) && op >= 0)) return res(false, `${F.name} rifiuta: opinione ${op} (serve 25, o 0 tra alleati).`);
-    if (!shared && !allied(from, to)) return res(false, `${F.name} non ha interesse ad armarvi.`);
     if (F.equipment < amount * 3 + 2000) return res(false, `${F.name} non ha equipaggiamento in eccesso.`);
+    const rule = (op >= 25 || (allied(from, to) && op >= 0)) && (shared || allied(from, to));
+    if (!this.decide(rule, from, `opinione ${op} (serve 25, o 0 tra alleati)${shared || allied(from, to) ? '' : ', nessun nemico in comune'}`)) return res(false, `${F.name} rifiuta di inviarvi equipaggiamento.`);
     this.transfer(from, to, amount);
     return res(true, `${F.name} vi invia ${fmt(amount)} di equipaggiamento.`);
   },
@@ -406,7 +428,7 @@ const Diplo = {
     const spa = this.surrenderProgress(a), spb = this.surrenderProgress(tb);
     const age = S.day - ((S.warInfo[warKey(a, b)] || {}).start ?? S.day);
     const accept = (spb >= 0.2 && spb > spa + 0.05) || (age >= 365 && Math.abs(spa - spb) < 0.1 && this.opinion(tb, a) > -60);
-    if (!accept) return res(false, `${C(tb).name} rifiuta la pace bianca (resa: loro ${Math.round(spb * 100)}%, tua ${Math.round(spa * 100)}%).`);
+    if (!this.decide(accept, tb, `resa: loro ${Math.round(spb * 100)}%, vostra ${Math.round(spa * 100)}%, guerra da ${age} giorni`)) return res(false, `${C(tb).name} rifiuta la pace bianca${this.why(`resa: loro ${Math.round(spb * 100)}%, tua ${Math.round(spa * 100)}%`)}.`);
     this.makePeace(a, tb);
     return res(true, `Pace bianca firmata con ${C(tb).name}.`);
   },

@@ -110,7 +110,7 @@ async function send(e, req) {
     max_tokens: 16000,
     // system e strumenti restano identici per tutta la conversazione: vengono letti dalla cache
     system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
-    tools: req.tools,
+    ...(req.tools.length ? { tools: req.tools } : {}),
     messages: req.messages,
     cache_control: { type: 'ephemeral' },
     thinking: { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } },

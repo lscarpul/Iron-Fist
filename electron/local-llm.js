@@ -73,8 +73,8 @@ function trimHistory(messages) {
 // Lo stato della partita arriva con ogni ordine: ai modelli locali si manda solo quello più recente,
 // le copie vecchie occuperebbero migliaia di token rallentando ogni risposta.
 const STATE_RE = /^<(stato_partita|stato_mondo)>/;
-function toChat(system, messages, kind) {
-  const out = [{ role: 'system', content: system + LOCAL_HINT }];
+function toChat(system, messages, kind, hint = true) {
+  const out = [{ role: 'system', content: system + (hint ? LOCAL_HINT : '') }];
   const names = {};
   const hist = trimHistory(messages);
   let lastState = -1;
@@ -239,12 +239,13 @@ async function ollamaChat(cfg, body, onProgress, signal) {
 async function send(cfg, req, onProgress = () => {}, signal) {
   const kind = cfg.kind === 'openai' ? 'openai' : 'ollama';
   const toolNames = new Set(req.tools.map(t => t.name));
-  const messages = toChat(req.system, req.messages, kind);
+  const messages = toChat(req.system, req.messages, kind, req.tools.length > 0);
   const tools = toFunctions(req.tools);
   try {
     if (kind === 'ollama') {
       const r = await ollamaChat(cfg, {
-        model: cfg.model, messages, tools, keep_alive: KEEP_ALIVE,
+        model: cfg.model, messages, keep_alive: KEEP_ALIVE,
+        ...(tools.length ? { tools } : {}), ...(req.json ? { format: 'json' } : {}),
         options: { num_ctx: NUM_CTX, temperature: 0.4 },
       }, onProgress, signal);
       const m = fromChat(r.message || {}, r.done_reason, toolNames);
@@ -252,7 +253,8 @@ async function send(cfg, req, onProgress = () => {}, signal) {
     }
     onProgress({ phase: 'prompt' });
     const r = await http(`${baseUrl(cfg)}/chat/completions`, {
-      model: cfg.model, messages, tools, tool_choice: 'auto', temperature: 0.4, max_tokens: 2048, stream: false,
+      model: cfg.model, messages, temperature: 0.4, max_tokens: 2048, stream: false,
+      ...(tools.length ? { tools, tool_choice: 'auto' } : {}), ...(req.json ? { response_format: { type: 'json_object' } } : {}),
     }, FIRST_TOKEN_MS, signal);
     const ch = (r.choices || [])[0] || {};
     const m = fromChat(ch.message || {}, ch.finish_reason, toolNames);
