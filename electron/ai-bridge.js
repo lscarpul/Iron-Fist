@@ -77,14 +77,28 @@ function errorInfo(e) {
 
 // Una singola chiamata all'API. Il ciclo degli strumenti gira nella pagina di gioco,
 // perché è lì che vivono lo stato della partita e le azioni.
-async function send(_e, req) {
+let inflight = null;   // AbortController della richiesta in corso (una sola alla volta)
+async function send(e, req) {
   if (!req || typeof req.system !== 'string' || !Array.isArray(req.messages) || !Array.isArray(req.tools)) {
     return { ok: false, kind: 'internal', error: 'Richiesta non valida.' };
   }
   if (currentProvider() === 'local') {
     const lc = localConfig();
     if (!lc.model) return { ok: false, kind: 'nokey', error: 'Scegli il modello locale nelle impostazioni.' };
-    return local.send(lc, req);
+    const ctl = new AbortController();
+    inflight = ctl;
+    let lastSent = 0;
+    const progress = p => {
+      const now = Date.now();
+      if (p.phase === 'writing' && now - lastSent < 250) return;   // non inondare la pagina
+      lastSent = now;
+      if (!e.sender.isDestroyed()) e.sender.send('governo:progress', p);
+    };
+    try {
+      return await local.send(lc, req, progress, ctl.signal);
+    } finally {
+      if (inflight === ctl) inflight = null;
+    }
   }
   const { key } = currentKey();
   if (!key) return { ok: false, kind: 'nokey', error: 'Manca la chiave API.' };
@@ -96,7 +110,7 @@ async function send(_e, req) {
     max_tokens: 16000,
     // system e strumenti restano identici per tutta la conversazione: vengono letti dalla cache
     system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
-    tools: req.tools,
+    ...(req.tools.length ? { tools: req.tools } : {}),
     messages: req.messages,
     cache_control: { type: 'ephemeral' },
     thinking: { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } },
@@ -155,6 +169,8 @@ function register() {
   });
   ipcMain.handle('governo:localModels', (_e, cfg) => local.listModels({ ...localConfig(), ...(cfg || {}) }));
   ipcMain.handle('governo:send', send);
+  ipcMain.handle('governo:cancel', () => { if (inflight) inflight.abort(); return true; });
+  ipcMain.handle('governo:warmup', () => currentProvider() === 'local' ? local.warmup(localConfig()) : { ok: true });
 }
 
 module.exports = { register };

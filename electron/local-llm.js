@@ -10,7 +10,12 @@ const PRESETS = {
   openai: { label: 'LM Studio / compatibile OpenAI', url: 'http://localhost:1234/v1' },
 };
 const MAX_HISTORY = 14;   // messaggi recenti inviati: i modelli piccoli hanno poco contesto
-const NUM_CTX = 24576;    // contesto richiesto a Ollama (il suo predefinito tronca il prompt)
+// contesto richiesto a Ollama (il suo predefinito tronca il prompt). Resta fisso: se cambia,
+// Ollama ricarica il modello. Più è grande, più memoria serve e più va lento senza GPU.
+const NUM_CTX = 12288;
+const KEEP_ALIVE = '30m';             // il modello resta in memoria tra un ordine e l'altro
+const FIRST_TOKEN_MS = 300000;        // lettura del prompt: su CPU può durare minuti
+const IDLE_MS = 90000;                // pausa massima tra due pezzi della risposta
 const TIMEOUT_MS = 240000;
 
 const LOCAL_HINT = `
@@ -19,9 +24,10 @@ Nota sul formato: per compiere un'azione chiama la funzione corrispondente (tool
 
 function baseUrl(cfg) { return String(cfg.url || PRESETS[cfg.kind]?.url || '').replace(/\/+$/, ''); }
 
-async function http(url, body, ms = TIMEOUT_MS) {
+async function http(url, body, ms = TIMEOUT_MS, signal) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), ms);
+  if (signal) signal.addEventListener('abort', () => ctl.abort(), { once: true });
   try {
     const res = await fetch(url, {
       method: body ? 'POST' : 'GET',
@@ -43,7 +49,9 @@ async function http(url, body, ms = TIMEOUT_MS) {
   }
 }
 
-function errorInfo(e, cfg) {
+function errorInfo(e, cfg, signal) {
+  if (signal && signal.aborted) return { kind: 'cancel', error: 'Ordine annullato.' };
+  if (e.timeout) return { kind: 'network', error: e.message };
   if (e.name === 'AbortError') return { kind: 'network', error: 'Il modello locale non ha risposto in tempo. Prova un modello più piccolo o riprova.' };
   if (e.status === 404 && /model/i.test(e.message)) return { kind: 'request', error: `Modello "${cfg.model}" non trovato sul server locale. Scaricalo (es. "ollama pull ${cfg.model}") o scegline un altro nelle impostazioni.` };
   if (e.status) return { kind: 'api', error: `Errore del server locale: ${e.message}` };
@@ -62,11 +70,18 @@ function trimHistory(messages) {
 }
 
 // Il formato di Claude → messaggi stile chat (comuni a Ollama e OpenAI, con piccole differenze)
-function toChat(system, messages, kind) {
-  const out = [{ role: 'system', content: system + LOCAL_HINT }];
+// Lo stato della partita arriva con ogni ordine: ai modelli locali si manda solo quello più recente,
+// le copie vecchie occuperebbero migliaia di token rallentando ogni risposta.
+const STATE_RE = /^<(stato_partita|stato_mondo)>/;
+function toChat(system, messages, kind, hint = true) {
+  const out = [{ role: 'system', content: system + (hint ? LOCAL_HINT : '') }];
   const names = {};
-  for (const m of trimHistory(messages)) {
-    const blocks = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content;
+  const hist = trimHistory(messages);
+  let lastState = -1;
+  hist.forEach((m, i) => { if (m.role === 'user' && Array.isArray(m.content) && m.content.some(b => b.type === 'text' && STATE_RE.test(b.text))) lastState = i; });
+  for (const [i, m] of hist.entries()) {
+    let blocks = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content;
+    if (i !== lastState) blocks = blocks.filter(b => !(b.type === 'text' && STATE_RE.test(b.text)));
     if (m.role === 'assistant') {
       const text = blocks.filter(b => b.type === 'text').map(b => b.text).join('\n');
       const calls = blocks.filter(b => b.type === 'tool_use').map(b => {
@@ -172,26 +187,90 @@ function fromChat(msg, finish, toolNames) {
 }
 
 // ---------- chiamate ----------
-async function send(cfg, req) {
+// Ollama in streaming: si sa subito se il modello sta ancora leggendo il prompt o sta già scrivendo,
+// e un modello bloccato si riconosce dal silenzio invece che da un unico timeout lunghissimo.
+async function ollamaChat(cfg, body, onProgress, signal) {
+  const ctl = new AbortController();
+  if (signal) signal.addEventListener('abort', () => ctl.abort(), { once: true });
+  let timer = null, why = null;
+  const arm = (ms, msg) => { clearTimeout(timer); timer = setTimeout(() => { why = msg; ctl.abort(); }, ms); };
+  arm(FIRST_TOKEN_MS, `Il modello locale sta impiegando più di ${FIRST_TOKEN_MS / 60000} minuti a leggere gli ordini. Probabilmente gira senza scheda video: prova un modello più piccolo (es. qwen2.5:3b).`);
+  onProgress({ phase: 'prompt' });   // Ollama manda le intestazioni solo col primo pezzo di risposta
+  try {
+    const res = await fetch(`${baseUrl(cfg)}/api/chat`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...body, stream: true }), signal: ctl.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      let msg = text.slice(0, 300);
+      try { const j = JSON.parse(text); msg = j.error?.message || j.error || msg; } catch { /* testo semplice */ }
+      const e = new Error(`HTTP ${res.status}: ${msg}`); e.status = res.status; throw e;
+    }
+    const dec = new TextDecoder();
+    let buf = '', content = '', calls = [], last = {}, chunks = 0;
+    for await (const part of res.body) {
+      buf += dec.decode(part, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+        if (!line) continue;
+        const j = JSON.parse(line);
+        if (j.error) { const e = new Error(`Errore del modello: ${j.error}`); e.status = 500; throw e; }
+        if (j.message) {
+          content += j.message.content || '';
+          if (j.message.tool_calls) calls.push(...j.message.tool_calls);
+        }
+        chunks++;
+        arm(IDLE_MS, 'Il modello locale si è fermato a metà risposta. Riprova.');
+        onProgress({ phase: 'writing', tokens: chunks });
+        last = j;
+      }
+    }
+    return { model: last.model, done_reason: last.done_reason, message: { role: 'assistant', content, tool_calls: calls } };
+  } catch (e) {
+    if (why && !(signal && signal.aborted)) { const t = new Error(why); t.timeout = true; throw t; }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function send(cfg, req, onProgress = () => {}, signal) {
   const kind = cfg.kind === 'openai' ? 'openai' : 'ollama';
   const toolNames = new Set(req.tools.map(t => t.name));
-  const messages = toChat(req.system, req.messages, kind);
+  const messages = toChat(req.system, req.messages, kind, req.tools.length > 0);
   const tools = toFunctions(req.tools);
   try {
     if (kind === 'ollama') {
-      const r = await http(`${baseUrl(cfg)}/api/chat`, {
-        model: cfg.model, messages, tools, stream: false,
+      const r = await ollamaChat(cfg, {
+        model: cfg.model, messages, keep_alive: KEEP_ALIVE,
+        ...(tools.length ? { tools } : {}), ...(req.json ? { format: 'json' } : {}),
         options: { num_ctx: NUM_CTX, temperature: 0.4 },
-      });
+      }, onProgress, signal);
       const m = fromChat(r.message || {}, r.done_reason, toolNames);
       return { ok: true, message: { ...m, model: r.model || cfg.model } };
     }
+    onProgress({ phase: 'prompt' });
     const r = await http(`${baseUrl(cfg)}/chat/completions`, {
-      model: cfg.model, messages, tools, tool_choice: 'auto', temperature: 0.4, max_tokens: 2048, stream: false,
-    });
+      model: cfg.model, messages, temperature: 0.4, max_tokens: 2048, stream: false,
+      ...(tools.length ? { tools, tool_choice: 'auto' } : {}), ...(req.json ? { response_format: { type: 'json_object' } } : {}),
+    }, FIRST_TOKEN_MS, signal);
     const ch = (r.choices || [])[0] || {};
     const m = fromChat(ch.message || {}, ch.finish_reason, toolNames);
     return { ok: true, message: { ...m, model: r.model || cfg.model } };
+  } catch (e) {
+    return { ok: false, ...errorInfo(e, cfg, signal) };
+  }
+}
+
+// Carica il modello in memoria in anticipo (all'apertura della finestra), così il primo ordine
+// non paga anche il caricamento da disco.
+async function warmup(cfg) {
+  if (cfg.kind === 'openai' || !cfg.model) return { ok: true };
+  try {
+    await http(`${baseUrl(cfg)}/api/generate`, { model: cfg.model, keep_alive: KEEP_ALIVE, options: { num_ctx: NUM_CTX } }, 120000);
+    return { ok: true };
   } catch (e) {
     return { ok: false, ...errorInfo(e, cfg) };
   }
@@ -211,4 +290,4 @@ async function listModels(cfg) {
   }
 }
 
-module.exports = { PRESETS, send, listModels, _test: { toChat, fromChat, callsFromText, trimHistory } };
+module.exports = { PRESETS, send, warmup, listModels, _test: { toChat, fromChat, callsFromText, trimHistory } };

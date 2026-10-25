@@ -64,3 +64,6 @@ table.gov-rel { width: 100%; border-collapse: collapse; font-size: 12px; }
 .gov-rel .opbar span { position: absolute; top: 50%; height: 6px; margin-top: -3px; }
 .gov-rel .opbar span.pos { background: var(--green); }
 .gov-rel .opbar span.neg { background: var(--red); }
+.gl.foreign { background: #26201a; border: 1px solid #5a4a30; font-style: italic; }
+.gl.foreign b { font-style: normal; color: var(--brass); }
+.gov-cancel { margin-left: 8px; padding: 1px 8px; font-size: 12px; }

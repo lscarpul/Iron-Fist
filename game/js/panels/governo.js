@@ -72,7 +72,10 @@ const Gov = {
       btn.classList.toggle('hidden', !S);
       if (this.open && this.view === 'rel' && S) this.render();
       this.newsTick();
+      if (this.open && this.view === 'chat' && (this.busy || this.newsBusy)) this.updateBusy();
     }, 1000);
+    const api = this.api();
+    if (api && api.onProgress) api.onProgress(p => { this.progress = p; this.updateBusy(); });
   },
 
   toggle(force) {
@@ -97,6 +100,9 @@ const Gov = {
     const api = this.api();
     this.status = api ? await api.status() : null;
     this.render();
+    // il modello locale si carica in memoria subito, non al primo ordine
+    const st = this.status;
+    if (st && st.provider === 'local' && st.ready && api.warmup && this.warmed !== st.local?.model) { this.warmed = st.local?.model; api.warmup(); }
     if (this.status && this.status.provider === 'local' && !this.localModels) this.scanLocal();
   },
 
@@ -128,10 +134,11 @@ const Gov = {
     if (!this.api()) h += `<div class="gl err">Il governo a parole funziona solo nell'app desktop di Iron Fist.</div>`;
     else if (this.status && !this.status.ready) h += `<div class="gl err">${this.status.provider === 'local' ? 'Nessun modello locale scelto. Avvia Ollama e' : 'Manca la chiave API di Claude.'} <a href="#" data-gov="toset">apri le impostazioni ⚙</a>.</div>`;
     for (const l of this.lines) {
+      if (l.who === 'foreign') { const c = C(l.code); h += `<div class="gl foreign">${flag(c)} <b>${esc(c.name)}</b>: «${esc(l.text)}»</div>`; continue; }
       if (l.who === 'act') h += `<div class="gl act ${l.ok ? 'ok' : 'ko'}">${l.ok ? '✔' : '✖'} ${esc(l.text)}</div>`;
       else h += `<div class="gl ${l.who}">${l.who === 'gov' ? richText(l.text) : esc(l.text).replace(/\n/g, '<br>')}</div>`;
     }
-    if (this.busy) h += `<div class="gl info busy">Il governo sta deliberando…</div>`;
+    if (this.busy || this.newsBusy) h += `<div class="gl info" id="gov-busy">${this.busyText()}</div>`;
     if (this.lines.length <= 1 && !this.busy) {
       const ex = ['Come stanno i rapporti con i nostri vicini?', 'Cosa mi consigli di costruire adesso?', 'Migliora i rapporti con la Polonia'];
       h += `<div class="gov-ex">${ex.map(t => `<button data-gov="ex" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
@@ -233,6 +240,7 @@ const Gov = {
     const api = this.api();
     if (name === 'toset') { this.setView('set'); return; }
     if (name === 'ex') { $('gov-input').value = el.dataset.text; this.submit(); return; }
+    if (name === 'cancel') { this.cancelling = true; this.updateBusy(); api.cancel?.(); return; }
     if (name === 'reset') { this.game = null; this.ensureGame(); this.setView('chat'); return; }
     if (name === 'savekey') {
       const r = await api.setKey($('gov-key').value);
@@ -275,10 +283,35 @@ Come lavori:
 - Ogni messaggio del leader arriva con lo stato attuale della partita tra i tag <stato_partita>. Usalo per codici dei paesi, risorse, costi e opinioni. Se ti servono dettagli su un paese o vuoi sapere se accetterebbe una proposta, usa lo strumento di rapporto prima di proporre o consigliare.
 - Le proposte agli altri paesi le decide il gioco, non tu: riporta fedelmente l'esito restituito dallo strumento, senza inventare accettazioni o concessioni. Puoi dare voce al governo straniero con una breve risposta diplomatica coerente con i motivi dell'esito.
 - Se il leader vuole qualcosa che nessuno strumento permette, dillo e proponi l'alternativa più vicina. Se un'azione fallisce, spiega perché con il motivo restituito.
-- Quando il leader parla direttamente a un paese ("dite alla Francia che..."), rispondi come quel governo reagirebbe, in base all'opinione e alla situazione, e usa gli strumenti se dal dialogo nasce un accordo concreto.
+- Le proposte formali (patti, fazioni, lend-lease, pace bianca, pretese) le decide il governo del paese che le riceve: la sua risposta arriva nel risultato dello strumento. Riportala, non inventarne un'altra.
+- Quando il leader parla direttamente a un paese ("dite alla Francia che..."), usa parla_con con le sue parole: risponde il governo di quel paese. Se dal dialogo nasce un accordo concreto, usa la proposta formale.
 - Se chiede un consiglio, ragiona da stratega di Hearts of Iron IV: economia prima della guerra, alleanze, minacce ai confini, tempistiche storiche.
 
 Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il tono di un ministro che riferisce al capo. Scrivi testo semplice senza titoli né tabelle; puoi usare **grassetto** per i nomi importanti. Non elencare di nuovo le azioni eseguite una per una: il leader le vede già nel registro, riassumi l'esito.`;
+  },
+
+  // avanzamento della richiesta in corso, con il tempo trascorso e il tasto per annullarla
+  busyText() {
+    const p = this.progress || {};
+    const secs = Math.round((Date.now() - (this.busySince || Date.now())) / 1000);
+    const local = this.status?.provider === 'local';
+    let what = 'Il governo sta deliberando';
+    if (p.phase === 'prompt') what = local ? 'Il modello legge la situazione' : 'Il governo sta deliberando';
+    else if (p.phase === 'foreign') what = `Il governo di ${C(p.code).name} valuta la proposta`;
+    else if (p.phase === 'writing') what = `Il governo scrive la risposta (${p.tokens} pezzi)`;
+    const slow = local && p.phase === 'prompt' && secs > 45 ? '<br><small>Senza scheda video il primo ordine può richiedere qualche minuto; i successivi sono più veloci.</small>' : '';
+    return `<span class="busy">${what}… ${secs} s</span> <button data-gov="cancel" class="gov-cancel" ${this.cancelling ? 'disabled' : ''}>${this.cancelling ? 'Annullo…' : 'Annulla'}</button>${slow}`;
+  },
+  updateBusy() {
+    const el = document.getElementById('gov-busy');
+    if (el) el.innerHTML = this.busyText();
+  },
+  // strumenti da mandare: a Claude tutti (restano in cache), a un modello locale solo quelli che
+  // c'entrano con l'ordine, con descrizioni brevi, perché ogni token in più costa secondi
+  toolsFor(text, mode) {
+    const all = GameActions.tools(mode);
+    if (this.status?.provider !== 'local') return all;
+    return compactTools(pickTools(all, text, mode));
   },
 
   async submit() {
@@ -291,10 +324,13 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
     if (!this.status?.ready) { this.setView('set'); return; }
     this.ensureGame();
     inp.value = '';
+    this.lastOrder = text;
     this.lines.push({ who: 'me', text });
     if (!this.tools || this.convMode !== this.mode || this.conv.length > this.MAX_CONV) this.startConversation();
+    const local = this.status.provider === 'local';
+    const tools = this.toolsFor(text, this.convMode);
     const userBlocks = [
-      { type: 'text', text: `<stato_partita>\n${gameStateText()}\n</stato_partita>` },
+      { type: 'text', text: `<stato_partita>\n${gameStateText(local ? { compact: true, focus: tools.some(t => t.name === 'start_national_focus') } : undefined)}\n</stato_partita>` },
       { type: 'text', text },
     ];
     // se il turno precedente si è interrotto dopo i risultati degli strumenti, l'ultimo messaggio è
@@ -306,9 +342,10 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
     const wasPaused = S.paused;
     S.paused = true;
     this.busy = true;
+    this.busySince = Date.now(); this.progress = null; this.cancelling = false;
     this.render();
     try {
-      await this.loop(this.conv, this.system, this.tools, this.convMode);
+      await this.loop(this.conv, this.system, tools, this.convMode);
     } finally {
       this.busy = false;
       if (!wasPaused && !S.over && S.paused) S.paused = false;
@@ -341,7 +378,7 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
       if (!r.ok) {
         // una richiesta fallita al primo passo non lascia traccia: si toglie l'ordine non risposto
         if (step === 0) conv.pop();
-        this.lines.push({ who: 'err', text: r.error });
+        this.lines.push({ who: r.kind === 'cancel' ? 'info' : 'err', text: r.error });
         if (r.kind === 'auth' || r.kind === 'nokey') this.refreshStatus();
         return;
       }
@@ -356,16 +393,101 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
       const results = [];
       for (const b of m.content) {
         if (b.type !== 'tool_use') continue;
-        const res = GameActions.exec(b.name, b.input, mode);
+        const res = FOREIGN_TOOLS[b.name] && typeof Diplo !== 'undefined' ? await this.foreignExec(b, mode)
+          : b.name === 'parla_con' ? await this.talkTo(b.input)
+          : GameActions.exec(b.name, b.input, mode);
+        if (S !== game) return;
         const label = actionLabel(b.name, b.input);
         const refused = res.ok && /"esito":"RIFIUTATO"/.test(res.result);
         if (label) this.lines.push({ who: 'act', ok: res.ok && !refused, text: !res.ok ? `${label}: ${res.error}` : refused ? `${label}: rifiutata` : label });
         results.push({ type: 'tool_result', tool_use_id: b.id, content: res.ok ? res.result : res.error, ...(res.ok ? {} : { is_error: true }) });
       }
       conv.push({ role: 'user', content: results });
+      this.progress = null;
       this.render();
     }
     this.lines.push({ who: 'err', text: 'Troppi passaggi per un solo ordine: mi fermo qui.' });
+  },
+
+  // ---------- le IA degli altri paesi ----------
+  // Una proposta del giocatore la decide il governo del paese che la riceve, con la sua IA.
+  // Prima si prova l'azione chiedendo a Diplo di fermarsi al momento della decisione (verdict 'ask'):
+  // se fallisce per un motivo concreto (potere politico, tensione, guerra) l'IA non serve.
+  async foreignExec(b, mode) {
+    const p = C(S.player), pp = p.pp;
+    let res;
+    Diplo.verdict = 'ask'; Diplo.asked = null;
+    try { res = GameActions.exec(b.name, b.input, mode); } finally { Diplo.verdict = null; }
+    const ask = Diplo.asked;
+    Diplo.asked = null;
+    if (!ask) return res;
+    p.pp = pp;   // la prova non costa nulla: si paga quando la proposta parte davvero
+    const d = await this.askCountry(ask, FOREIGN_TOOLS[b.name](b.input || {}, ask.who));
+    Diplo.verdict = d ? d.accept : ask.rule;
+    try { res = GameActions.exec(b.name, b.input, mode); } finally { Diplo.verdict = null; }
+    if (d && d.reply) {
+      this.lines.push({ who: 'foreign', code: ask.who, text: d.reply });
+      const note = ` Risposta del governo di ${C(ask.who).name}: «${d.reply}»`;
+      if (res.ok) res.result += note; else res.error += note;
+    }
+    return res;
+  },
+  // situazione vista dal paese `code`, per i suoi prompt
+  foreignBrief(code) {
+    const c = C(code), pc = S.player, P = C(pc);
+    const ideo = k => (typeof IDEOLOGIES !== 'undefined' && IDEOLOGIES[C(k).ideology]?.name) || C(k).ideology || 'non allineato';
+    const divs = k => S.divs.filter(d => d.owner === k && !d.dead).length;
+    const war = k => enemiesOf(k).map(e => C(e).name).join(', ') || 'nessuna';
+    return [
+      `Tu: ${c.name}, ${ideo(code)}${c.leader ? `, guidato da ${c.leader}` : ''}${c.major ? ', grande potenza' : ''}. Fabbriche ${c.civ}/${c.mil}, ${divs(code)} divisioni. Fazione: ${c.faction ? S.factions[c.faction].name : 'nessuna'}. Guerre: ${war(code)}.`,
+      `Loro: ${P.name}, ${ideo(pc)}${P.leader ? `, guidato da ${P.leader}` : ''}. Fabbriche ${P.civ}/${P.mil}, ${divs(pc)} divisioni. Fazione: ${P.faction ? S.factions[P.faction].name : 'nessuna'}. Guerre: ${war(pc)}.`,
+      `La tua opinione di ${P.name}: ${relOpinion(code, pc)}. La loro opinione di te: ${relOpinion(pc, code)}. ${atWar(code, pc) ? 'Siete in guerra.' : allied(code, pc) ? 'Siete alleati.' : ''} Tensione mondiale ${Math.round(S.tension || 0)}%.`,
+    ].join('\n');
+  },
+  async askCountry(ask, what) {
+    const c = C(ask.who), P = C(S.player);
+    const system = `Sei il governo di ${c.name} il ${dateLabel(S.day)}, in un gioco di strategia sul modello di Hearts of Iron IV. Decidi e parli solo per il tuo paese, con la sua personalità storica, la sua ideologia e i suoi interessi.
+Ricevi una proposta da ${P.name}. I tuoi consiglieri ti danno un parere basato sui numeri: di solito seguilo, ma puoi decidere diversamente se ideologia, storia, situazione o il modo in cui è stata fatta la proposta lo giustificano.
+Rispondi solo con un oggetto JSON: {"decisione": "accetta" oppure "rifiuta", "risposta": "una o due frasi in italiano rivolte a ${P.name}, in prima persona, come un diplomatico del tuo paese"}`;
+    const user = `${this.foreignBrief(ask.who)}\n\nProposta di ${P.name}: ${what}.\nParole del loro leader: "${(this.lastOrder || '').slice(0, 400)}"\nParere dei consiglieri: ${ask.rule ? 'favorevole' : 'contrario'} (${ask.reason}).`;
+    const r = await this.oneShot(system, user, ask.who);
+    if (!r) return null;
+    const dec = normText(r.decisione || '');
+    const accept = /accett|si\b|yes|accept/.test(dec) ? true : /rifiut|no\b|reject/.test(dec) ? false : ask.rule;
+    return { accept, reply: String(r.risposta || '').trim().slice(0, 400) };
+  },
+  // il giocatore parla direttamente a un altro paese: risponde la sua IA, e il tono conta un po'
+  async talkTo(input) {
+    let code;
+    try { code = findCountry(input.paese); } catch (e) { return { ok: false, error: e.message }; }
+    if (code === S.player || !C(code).alive) return { ok: false, error: 'Paese non valido.' };
+    const c = C(code), P = C(S.player);
+    const system = `Sei il governo di ${c.name} il ${dateLabel(S.day)}, in un gioco di strategia sul modello di Hearts of Iron IV. Parli solo per il tuo paese, con la sua personalità storica, la sua ideologia e i suoi interessi. Non prometti azioni concrete (trattati, alleanze, territori): quelle passano da proposte formali.
+${P.name} ti manda un messaggio. Rispondi solo con un oggetto JSON: {"risposta": "da una a tre frasi in italiano rivolte a ${P.name}, in prima persona", "umore": un numero da -5 (offeso) a 5 (lusingato)}`;
+    const user = `${this.foreignBrief(code)}\n\nMessaggio di ${P.name}: "${String(input.messaggio || '').slice(0, 600)}"`;
+    const r = await this.oneShot(system, user, code);
+    if (!r) return { ok: false, error: `${c.name} non ha risposto.` };
+    const reply = String(r.risposta || '').trim().slice(0, 500);
+    let mood = Math.max(-5, Math.min(5, Math.round(+r.umore || 0)));
+    // al massimo un miglioramento al mese per paese: parlare non sostituisce migliora_relazioni
+    S.talkDay = S.talkDay || {};
+    if (mood > 0 && S.day - (S.talkDay[code] ?? -999) < 30) mood = 0;
+    if (mood > 0) S.talkDay[code] = S.day;
+    if (mood && typeof Diplo !== 'undefined') Diplo.addRel(code, S.player, mood);
+    if (reply) this.lines.push({ who: 'foreign', code, text: reply });
+    return { ok: true, result: `Risposta del governo di ${c.name}: «${reply}»${mood ? ` (opinione verso di noi ${mood > 0 ? '+' : ''}${mood})` : ''}` };
+  },
+  // una chiamata breve senza strumenti che risponde in JSON
+  async oneShot(system, user, code) {
+    const api = this.api();
+    this.progress = { phase: 'foreign', code };
+    this.updateBusy();
+    const r = await api.send({ system, tools: [], json: true, messages: [{ role: 'user', content: [{ type: 'text', text: user }] }] });
+    this.progress = null;
+    if (!r.ok) { if (r.kind !== 'cancel') this.lines.push({ who: 'err', text: `${C(code).name}: ${r.error}` }); return null; }
+    const text = r.message.content.filter(x => x.type === 'text').map(x => x.text).join('\n');
+    const m = text.match(/\{[\s\S]*\}/);
+    try { return JSON.parse(m ? m[0] : text); } catch (e) { return { risposta: text.replace(/[{}"]/g, '').slice(0, 300) }; }
   },
 
   // ---------- notiziario: eventi del mondo generati dal narratore ----------
@@ -380,15 +502,17 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
   async generateNews() {
     const game = S;
     this.newsBusy = true;
+    this.busySince = Date.now(); this.progress = null; this.cancelling = false;
     this.ensureGame();
     this.lines.push({ who: 'info', text: `📰 Notiziario del ${dateLabel(S.day)}` });
     this.render();
-    const conv = [{ role: 'user', content: [{ type: 'text', text: `<stato_mondo>\n${worldStateText()}\n</stato_mondo>\n\n<stato_partita>\n${gameStateText()}\n</stato_partita>\n\nSono passati ${this.newsEvery} mesi dall'ultimo notiziario. Racconta da 1 a 3 eventi plausibili accaduti nel mondo in questo periodo e applicane le conseguenze con gli strumenti.` }] }];
+    const conv = [{ role: 'user', content: [{ type: 'text', text: `<stato_mondo>\n${worldStateText()}\n</stato_mondo>\n\n<stato_partita>\n${gameStateText(this.status?.provider === 'local' ? { compact: true } : undefined)}\n</stato_partita>\n\nSono passati ${this.newsEvery} mesi dall'ultimo notiziario. Racconta da 1 a 3 eventi plausibili accaduti nel mondo in questo periodo e applicane le conseguenze con gli strumenti.` }] }];
     try {
-      await this.loop(conv, NEWS_PROMPT, GameActions.tools('narrator'), 'narrator');
+      const local = this.status?.provider === 'local';
+      const tools = GameActions.tools('narrator').filter(t => !local || NEWS_TOOLS.test(t.name));
+      await this.loop(conv, NEWS_PROMPT, local ? compactTools(tools) : tools, 'narrator');
     } finally {
-      if (S === game) this.newsBusy = false;
-      else this.newsBusy = false;
+      this.newsBusy = false;
       this.render();
     }
   },
@@ -430,6 +554,73 @@ function actionLabel(name, input) {
     }
   }
 }
+
+// ---------- strumenti per i modelli locali ----------
+// Ogni gruppo: quali strumenti (per nome) e quali parole dell'ordine lo richiamano (radici senza accenti).
+const TOOL_GROUPS = [
+  { tools: /migliora_relazioni|patto_non_aggressione|rompi_patto|garantisci|embargo|annulla_accordo|parla_con/,
+    words: /relazi|rapport|amic|opinion|patt|garan|embargo|accord|trattat|negoz|propo|aggress|rompi|diplom/ },
+  { tools: /parla_con/, words: /dit[ei] |di' |scriv|messagg|parla|chiedi|minacci|rassicur|salut|ambasciat|comunic/ },
+  { tools: /dichiara_guerra|obiettivo_guerra|pretesa|pace_bianca/,
+    words: /guerr|pace|pretes|obiettiv|giustific|annett|invad|attacc|conquist|monaco/ },
+  { tools: /fazione/, words: /fazion|allea|asse|comintern|blocco/ },
+  { tools: /suddito|autonomia/, words: /suddit|fantocc|autonom|vassall|liber/ },
+  { tools: /lend_lease/, words: /lend|prest|aiut|forni/ },
+  { tools: /costruisci|fabbriche_linea|legge_economica|dottrina_industriale|economia_stato/,
+    words: /fabbric|costru|cantier|legg|econom|industri|mobilit/ },
+  { tools: /linea_produzione|modello_linea|fabbriche_linea|compra|vendi/,
+    words: /produ|linea|equipagg|carri|cannon|fucil|aere|nav|compr|vend|armi/ },
+  { tools: /importa|legge_commerciale/, words: /risors|petrol|acciai|gomma|allumin|tungst|cromo|commerc|import|scamb/ },
+  { tools: /recruit/, words: /divisio|reclut|addestr|eserc|trupp|soldat/ },
+  { tools: /spionaggio|agenzia|collaborazionista/, words: /spi|agent|sabot|colpo|intellig|decritt|propagand|collabor/ },
+  { tools: /occupazione/, words: /occup|resist|guarnig|conform/ },
+  { tools: /focus/, words: /focus|ricerc|tecnolog|dottrin|piano/ },
+];
+// strumenti del narratore (cambiano il mondo) e parole che li richiamano
+const WORLD_WORDS = /citt|fond|region|provinc|nazion|indipend|govern|regim|capo di|leader|notizi|rinomin|capital|confin|colpo di stato|punti vittoria|separat|rivolt|elezion|cedi|cession|territor|schier|evento|inventa|nasce|nuov[oa] stato/;
+const NEWS_TOOLS = /notizia|cambia_governo|cambia_rapporti|modifica_risorse|crea_citta|cedi_regioni|crea_nazione|schiera_divisioni|guerra_tra|pace_tra|elenca_regioni|rinomina_nazione/;
+function normText(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+function pickTools(all, text, mode) {
+  const t = normText(text);
+  const want = new Set(['country_report']);
+  let hit = false;
+  for (const g of TOOL_GROUPS) if (g.words.test(t)) { hit = true; for (const x of all) if (g.tools.test(x.name)) want.add(x.name); }
+  if (mode === 'narrator') {
+    const gov = new Set(GameActions.tools('government').map(x => x.name));
+    const world = all.filter(x => !gov.has(x.name));
+    if (WORLD_WORDS.test(t)) { hit = true; for (const x of world) want.add(x.name); }
+  }
+  // "giustifica l'annessione": solo la giustificazione, niente strumenti che annettono subito
+  if (/giustific/.test(t) && !/pretend|pretes|ultimatum|subito/.test(t)) { want.delete('pretesa_annessione'); want.delete('annetti_paese'); }
+  // ordine generico ("che facciamo?"): le azioni più comuni
+  if (!hit) for (const x of all) if (/migliora_relazioni|costruisci|start_national_focus|notizia/.test(x.name)) want.add(x.name);
+  return all.filter(x => want.has(x.name));
+}
+// descrizioni accorciate alla prima frase: i modelli piccoli leggono più in fretta e sbagliano meno
+function compactTools(tools) {
+  const cut = (d, n) => { d = String(d || ''); const i = d.search(/[.:;](\s|$)/); if (i > 20 && i < n) d = d.slice(0, i + 1); return d.length > n ? d.slice(0, n - 1) + '…' : d; };
+  return tools.map(t => {
+    const props = {};
+    for (const [k, v] of Object.entries(t.input_schema?.properties || {})) props[k] = { ...v, ...(v.description ? { description: cut(v.description, 80) } : {}) };
+    return { ...t, description: cut(t.description, 160), input_schema: { ...t.input_schema, properties: props } };
+  });
+}
+
+// proposte decise dall'IA del paese che le riceve: nome dello strumento → come descriverla a quel paese
+const FOREIGN_TOOLS = {
+  patto_non_aggressione: () => 'un patto di non aggressione',
+  invita_in_fazione: () => `entrare nella loro fazione, ${S.factions[C(S.player).faction]?.name || ''}`,
+  chiedi_adesione_fazione: () => `farli entrare nella tua fazione`,
+  chiedi_lend_lease: i => `inviare loro ${i.quantita || 'un po\''} di equipaggiamento in lend-lease`,
+  pace_bianca: () => 'una pace bianca: fine della guerra e ritorno ai confini di prima',
+  pretesa_annessione: () => 'cedere alla loro pretesa e farti annettere senza combattere',
+};
+GameActions.register({
+  name: 'parla_con',
+  description: 'Manda un messaggio diretto al governo di un altro paese (saluti, minacce, rassicurazioni, domande): risponde la sua IA e il tono può cambiare un poco la sua opinione. Per accordi concreti usa le proposte formali.',
+  input_schema: { type: 'object', properties: { paese: { type: 'string', description: 'Paese' }, messaggio: { type: 'string', description: 'Il messaggio, in italiano' } }, required: ['paese', 'messaggio'] },
+  run() { return { ok: false, msg: 'Disponibile solo dalla finestra del Governo.' }; },
+});
 
 // preferenze per questo PC (localStorage può mancare: si usano i valori predefiniti)
 function pref(k, d) { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } }
