@@ -72,7 +72,10 @@ const Gov = {
       btn.classList.toggle('hidden', !S);
       if (this.open && this.view === 'rel' && S) this.render();
       this.newsTick();
+      if (this.open && this.view === 'chat' && (this.busy || this.newsBusy)) this.updateBusy();
     }, 1000);
+    const api = this.api();
+    if (api && api.onProgress) api.onProgress(p => { this.progress = p; this.updateBusy(); });
   },
 
   toggle(force) {
@@ -97,6 +100,9 @@ const Gov = {
     const api = this.api();
     this.status = api ? await api.status() : null;
     this.render();
+    // il modello locale si carica in memoria subito, non al primo ordine
+    const st = this.status;
+    if (st && st.provider === 'local' && st.ready && api.warmup && this.warmed !== st.local?.model) { this.warmed = st.local?.model; api.warmup(); }
     if (this.status && this.status.provider === 'local' && !this.localModels) this.scanLocal();
   },
 
@@ -131,7 +137,7 @@ const Gov = {
       if (l.who === 'act') h += `<div class="gl act ${l.ok ? 'ok' : 'ko'}">${l.ok ? '✔' : '✖'} ${esc(l.text)}</div>`;
       else h += `<div class="gl ${l.who}">${l.who === 'gov' ? richText(l.text) : esc(l.text).replace(/\n/g, '<br>')}</div>`;
     }
-    if (this.busy) h += `<div class="gl info busy">Il governo sta deliberando…</div>`;
+    if (this.busy || this.newsBusy) h += `<div class="gl info" id="gov-busy">${this.busyText()}</div>`;
     if (this.lines.length <= 1 && !this.busy) {
       const ex = ['Come stanno i rapporti con i nostri vicini?', 'Cosa mi consigli di costruire adesso?', 'Migliora i rapporti con la Polonia'];
       h += `<div class="gov-ex">${ex.map(t => `<button data-gov="ex" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
@@ -233,6 +239,7 @@ const Gov = {
     const api = this.api();
     if (name === 'toset') { this.setView('set'); return; }
     if (name === 'ex') { $('gov-input').value = el.dataset.text; this.submit(); return; }
+    if (name === 'cancel') { this.cancelling = true; this.updateBusy(); api.cancel?.(); return; }
     if (name === 'reset') { this.game = null; this.ensureGame(); this.setView('chat'); return; }
     if (name === 'savekey') {
       const r = await api.setKey($('gov-key').value);
@@ -281,6 +288,29 @@ Come lavori:
 Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il tono di un ministro che riferisce al capo. Scrivi testo semplice senza titoli né tabelle; puoi usare **grassetto** per i nomi importanti. Non elencare di nuovo le azioni eseguite una per una: il leader le vede già nel registro, riassumi l'esito.`;
   },
 
+  // avanzamento della richiesta in corso, con il tempo trascorso e il tasto per annullarla
+  busyText() {
+    const p = this.progress || {};
+    const secs = Math.round((Date.now() - (this.busySince || Date.now())) / 1000);
+    const local = this.status?.provider === 'local';
+    let what = 'Il governo sta deliberando';
+    if (p.phase === 'prompt') what = local ? 'Il modello legge la situazione' : 'Il governo sta deliberando';
+    else if (p.phase === 'writing') what = `Il governo scrive la risposta (${p.tokens} pezzi)`;
+    const slow = local && p.phase === 'prompt' && secs > 45 ? '<br><small>Senza scheda video il primo ordine può richiedere qualche minuto; i successivi sono più veloci.</small>' : '';
+    return `<span class="busy">${what}… ${secs} s</span> <button data-gov="cancel" class="gov-cancel" ${this.cancelling ? 'disabled' : ''}>${this.cancelling ? 'Annullo…' : 'Annulla'}</button>${slow}`;
+  },
+  updateBusy() {
+    const el = document.getElementById('gov-busy');
+    if (el) el.innerHTML = this.busyText();
+  },
+  // strumenti da mandare: a Claude tutti (restano in cache), a un modello locale solo quelli che
+  // c'entrano con l'ordine, con descrizioni brevi, perché ogni token in più costa secondi
+  toolsFor(text, mode) {
+    const all = GameActions.tools(mode);
+    if (this.status?.provider !== 'local') return all;
+    return compactTools(pickTools(all, text, mode));
+  },
+
   async submit() {
     const inp = $('gov-input');
     const text = inp.value.trim();
@@ -293,8 +323,10 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
     inp.value = '';
     this.lines.push({ who: 'me', text });
     if (!this.tools || this.convMode !== this.mode || this.conv.length > this.MAX_CONV) this.startConversation();
+    const local = this.status.provider === 'local';
+    const tools = this.toolsFor(text, this.convMode);
     const userBlocks = [
-      { type: 'text', text: `<stato_partita>\n${gameStateText()}\n</stato_partita>` },
+      { type: 'text', text: `<stato_partita>\n${gameStateText(local ? { compact: true, focus: tools.some(t => t.name === 'start_national_focus') } : undefined)}\n</stato_partita>` },
       { type: 'text', text },
     ];
     // se il turno precedente si è interrotto dopo i risultati degli strumenti, l'ultimo messaggio è
@@ -306,9 +338,10 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
     const wasPaused = S.paused;
     S.paused = true;
     this.busy = true;
+    this.busySince = Date.now(); this.progress = null; this.cancelling = false;
     this.render();
     try {
-      await this.loop(this.conv, this.system, this.tools, this.convMode);
+      await this.loop(this.conv, this.system, tools, this.convMode);
     } finally {
       this.busy = false;
       if (!wasPaused && !S.over && S.paused) S.paused = false;
@@ -341,7 +374,7 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
       if (!r.ok) {
         // una richiesta fallita al primo passo non lascia traccia: si toglie l'ordine non risposto
         if (step === 0) conv.pop();
-        this.lines.push({ who: 'err', text: r.error });
+        this.lines.push({ who: r.kind === 'cancel' ? 'info' : 'err', text: r.error });
         if (r.kind === 'auth' || r.kind === 'nokey') this.refreshStatus();
         return;
       }
@@ -363,6 +396,7 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
         results.push({ type: 'tool_result', tool_use_id: b.id, content: res.ok ? res.result : res.error, ...(res.ok ? {} : { is_error: true }) });
       }
       conv.push({ role: 'user', content: results });
+      this.progress = null;
       this.render();
     }
     this.lines.push({ who: 'err', text: 'Troppi passaggi per un solo ordine: mi fermo qui.' });
@@ -380,15 +414,17 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
   async generateNews() {
     const game = S;
     this.newsBusy = true;
+    this.busySince = Date.now(); this.progress = null; this.cancelling = false;
     this.ensureGame();
     this.lines.push({ who: 'info', text: `📰 Notiziario del ${dateLabel(S.day)}` });
     this.render();
-    const conv = [{ role: 'user', content: [{ type: 'text', text: `<stato_mondo>\n${worldStateText()}\n</stato_mondo>\n\n<stato_partita>\n${gameStateText()}\n</stato_partita>\n\nSono passati ${this.newsEvery} mesi dall'ultimo notiziario. Racconta da 1 a 3 eventi plausibili accaduti nel mondo in questo periodo e applicane le conseguenze con gli strumenti.` }] }];
+    const conv = [{ role: 'user', content: [{ type: 'text', text: `<stato_mondo>\n${worldStateText()}\n</stato_mondo>\n\n<stato_partita>\n${gameStateText(this.status?.provider === 'local' ? { compact: true } : undefined)}\n</stato_partita>\n\nSono passati ${this.newsEvery} mesi dall'ultimo notiziario. Racconta da 1 a 3 eventi plausibili accaduti nel mondo in questo periodo e applicane le conseguenze con gli strumenti.` }] }];
     try {
-      await this.loop(conv, NEWS_PROMPT, GameActions.tools('narrator'), 'narrator');
+      const local = this.status?.provider === 'local';
+      const tools = GameActions.tools('narrator').filter(t => !local || NEWS_TOOLS.test(t.name));
+      await this.loop(conv, NEWS_PROMPT, local ? compactTools(tools) : tools, 'narrator');
     } finally {
-      if (S === game) this.newsBusy = false;
-      else this.newsBusy = false;
+      this.newsBusy = false;
       this.render();
     }
   },
@@ -429,6 +465,54 @@ function actionLabel(name, input) {
       return t.charAt(0).toUpperCase() + t.slice(1) + c;
     }
   }
+}
+
+// ---------- strumenti per i modelli locali ----------
+// Ogni gruppo: quali strumenti (per nome) e quali parole dell'ordine lo richiamano (radici senza accenti).
+const TOOL_GROUPS = [
+  { tools: /migliora_relazioni|patto_non_aggressione|rompi_patto|garantisci|embargo|annulla_accordo/,
+    words: /relazi|rapport|amic|opinion|patt|garan|embargo|accord|trattat|negoz|propo|aggress|rompi|diplom/ },
+  { tools: /dichiara_guerra|obiettivo_guerra|pretesa|pace_bianca/,
+    words: /guerr|pace|pretes|obiettiv|giustific|annett|invad|attacc|conquist|monaco/ },
+  { tools: /fazione/, words: /fazion|allea|asse|comintern|blocco/ },
+  { tools: /suddito|autonomia/, words: /suddit|fantocc|autonom|vassall|liber/ },
+  { tools: /lend_lease/, words: /lend|prest|aiut|forni/ },
+  { tools: /costruisci|fabbriche_linea|legge_economica|dottrina_industriale|economia_stato/,
+    words: /fabbric|costru|cantier|legg|econom|industri|mobilit/ },
+  { tools: /linea_produzione|modello_linea|fabbriche_linea|compra|vendi/,
+    words: /produ|linea|equipagg|carri|cannon|fucil|aere|nav|compr|vend|armi/ },
+  { tools: /importa|legge_commerciale/, words: /risors|petrol|acciai|gomma|allumin|tungst|cromo|commerc|import|scamb/ },
+  { tools: /recruit/, words: /divisio|reclut|addestr|eserc|trupp|soldat/ },
+  { tools: /spionaggio|agenzia|collaborazionista/, words: /spi|agent|sabot|colpo|intellig|decritt|propagand|collabor/ },
+  { tools: /occupazione/, words: /occup|resist|guarnig|conform/ },
+  { tools: /focus/, words: /focus|ricerc|tecnolog|dottrin|piano/ },
+];
+// strumenti del narratore (cambiano il mondo) e parole che li richiamano
+const WORLD_WORDS = /citt|fond|region|provinc|nazion|indipend|govern|regim|capo di|leader|notizi|rinomin|capital|confin|colpo di stato|punti vittoria|separat|rivolt|elezion|cedi|cession|territor|schier|evento|inventa|nasce|nuov[oa] stato/;
+const NEWS_TOOLS = /notizia|cambia_governo|cambia_rapporti|modifica_risorse|crea_citta|cedi_regioni|crea_nazione|schiera_divisioni|guerra_tra|pace_tra|elenca_regioni|rinomina_nazione/;
+function normText(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+function pickTools(all, text, mode) {
+  const t = normText(text);
+  const want = new Set(['country_report']);
+  let hit = false;
+  for (const g of TOOL_GROUPS) if (g.words.test(t)) { hit = true; for (const x of all) if (g.tools.test(x.name)) want.add(x.name); }
+  if (mode === 'narrator') {
+    const gov = new Set(GameActions.tools('government').map(x => x.name));
+    const world = all.filter(x => !gov.has(x.name));
+    if (WORLD_WORDS.test(t)) { hit = true; for (const x of world) want.add(x.name); }
+  }
+  // ordine generico ("che facciamo?"): le azioni più comuni
+  if (!hit) for (const x of all) if (/migliora_relazioni|costruisci|start_national_focus|notizia/.test(x.name)) want.add(x.name);
+  return all.filter(x => want.has(x.name));
+}
+// descrizioni accorciate alla prima frase: i modelli piccoli leggono più in fretta e sbagliano meno
+function compactTools(tools) {
+  const cut = (d, n) => { d = String(d || ''); const i = d.search(/[.:;](\s|$)/); if (i > 20 && i < n) d = d.slice(0, i + 1); return d.length > n ? d.slice(0, n - 1) + '…' : d; };
+  return tools.map(t => {
+    const props = {};
+    for (const [k, v] of Object.entries(t.input_schema?.properties || {})) props[k] = { ...v, ...(v.description ? { description: cut(v.description, 80) } : {}) };
+    return { ...t, description: cut(t.description, 160), input_schema: { ...t.input_schema, properties: props } };
+  });
 }
 
 // preferenze per questo PC (localStorage può mancare: si usano i valori predefiniti)
