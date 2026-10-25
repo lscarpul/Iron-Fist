@@ -698,13 +698,16 @@ GameActions.register({
 });
 
 // ---------- stato della partita per l'IA ----------
-function gameStateText() {
+// compact: versione corta per i modelli locali (senza l'elenco completo dei paesi della diplomazia
+// e senza i focus disponibili, a meno che servano: focus = true)
+function gameStateText({ compact = false, focus = true } = {}) {
   const pc = S.player, p = C(pc);
   const L = [];
   L.push(`Data: ${dateLabel(S.day)}. Guidiamo: ${p.name} (${pc}).`);
   L.push(`Potere politico ${Math.floor(p.pp)} (+${p.ppGain.toFixed(1)}/g). Fabbriche civili ${p.civ}, militari ${p.mil}, slot ${p.civ + p.mil + p.construction.length}/${factoryCap(p)}. Equipaggiamento ${Math.floor(p.equipment)}${typeof Econ !== 'undefined' ? '' : ` (+${Math.round(p.mil * 3 * (1 + p.eqBonus))}/g)`}, manodopera ${Math.floor(p.manpower)}. Divisioni ${S.divs.filter(d => d.owner === pc && !d.dead).length}${p.training.length ? ` + ${p.training.length} in addestramento` : ''}. Corazzati: ${p.armorTech ? 'sì' : 'no'}.`);
   L.push(`Cantieri: ${p.construction.length ? p.construction.map((j, i) => `[${i}] ${j.type} ${Math.round(100 * j.prog / j.cost)}%`).join(', ') : 'nessuno'}.`);
-  L.push(`Focus: ${p.focus ? `${focusOf(p, p.focus).name} (${p.focusDays} g)` : 'nessuno'}. Disponibili: ${focusList(p).filter(f => focusAvailable(p, f)).map(f => `${f.id} "${f.name}" ${f.days}g${f.desc || f.d ? `: ${f.desc || f.d}` : ''}`).join(' | ') || 'nessuno'}.`);
+  const avail = compact && !focus ? '' : ` Disponibili: ${focusList(p).filter(f => focusAvailable(p, f)).map(f => `${f.id} "${f.name}" ${f.days}g${f.desc || f.d ? `: ${f.desc || f.d}` : ''}`).join(' | ') || 'nessuno'}.`;
+  L.push(`Focus: ${p.focus ? `${focusOf(p, p.focus).name} (${p.focusDays} g)` : 'nessuno'}.${avail}`);
   L.push(`Fazione: ${p.faction ? S.factions[p.faction].name : 'nessuna'}. Nemici: ${enemiesOf(pc).map(e => C(e).name).join(', ') || 'nessuno'}. Garantiamo: ${S.guarantees.filter(g => g.by === pc).map(g => C(g.to).name).join(', ') || 'nessuno'}. Patti di non aggressione: ${relPacts(pc).map(k => C(k).name).join(', ') || 'nessuno'}.`);
   // nel mondo intero i paesi sono tanti: per esteso solo quelli che contano per noi, gli altri solo per nome
   const near = new Set();
@@ -718,12 +721,20 @@ function gameStateText() {
     if (!relevant(k)) { others.push(`${k} ${c.name}`); continue; }
     const st = atWar(pc, k) ? 'GUERRA' : allied(pc, k) ? 'alleato' : 'neutrale';
     const ew = enemiesOf(k);
-    L.push(`- ${k} ${c.name}${c.major ? ' (grande potenza)' : ''}, ${c.faction ? S.factions[c.faction].name : 'nessuna fazione'}, ${c.civ}/${c.mil}, ${S.divs.filter(d => d.owner === k && !d.dead).length} div, ${st}, ${relOpinion(k, pc)}/${relOpinion(pc, k)}${ew.length ? `, in guerra con ${ew.map(e => C(e).name).join(', ')}` : ''}`);
+    const ideo = typeof IDEOLOGIES !== 'undefined' && IDEOLOGIES[c.ideology] ? `, ${IDEOLOGIES[c.ideology].short.toLowerCase()}` : '';
+    L.push(`- ${k} ${c.name}${c.major ? ' (grande potenza)' : ''}${ideo}, ${c.faction ? S.factions[c.faction].name : 'nessuna fazione'}, ${c.civ}/${c.mil}, ${S.divs.filter(d => d.owner === k && !d.dead).length} div, ${st}, ${relOpinion(k, pc)}/${relOpinion(pc, k)}${ew.length ? `, in guerra con ${ew.map(e => C(e).name).join(', ')}` : ''}`);
   }
   if (others.length) L.push(`Altri paesi: ${others.join(', ')}.`);
   const gone = Object.values(S.countries).filter(c => !c.alive).map(c => c.name);
   if (gone.length) L.push(`Paesi scomparsi: ${gone.join(', ')}.`);
-  if (typeof DiploAPI !== 'undefined' && DiploAPI.summary) { try { L.push(DiploAPI.summary(pc)); } catch (e) { /* ignora */ } }
+  if (typeof DiploAPI !== 'undefined' && DiploAPI.summary) {
+    try {
+      let d = DiploAPI.summary(pc);
+      // l'elenco di tutti i paesi ripete quello sopra: nella versione corta si tiene solo l'intestazione
+      if (compact) d = d.split('\n').filter(l => !/^- |^Paesi \(opinione/.test(l)).join('\n');
+      L.push(d);
+    } catch (e) { /* ignora */ }
+  }
   if (typeof Econ !== 'undefined' && Econ.summary) { try { L.push(Econ.summary(pc)); } catch (e) { /* ignora */ } }
   const extra = GameActions.context();
   if (extra) L.push(extra);

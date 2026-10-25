@@ -11,4 +11,7 @@ contextBridge.exposeInMainWorld('governoAPI', {
   setLocal: cfg => ipcRenderer.invoke('governo:setLocal', cfg),
   localModels: cfg => ipcRenderer.invoke('governo:localModels', cfg),
   send: req => ipcRenderer.invoke('governo:send', req),
+  cancel: () => ipcRenderer.invoke('governo:cancel'),
+  warmup: () => ipcRenderer.invoke('governo:warmup'),
+  onProgress: fn => ipcRenderer.on('governo:progress', (_e, p) => fn(p)),
 });
