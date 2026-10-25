@@ -10,7 +10,7 @@ const PRESETS = {
   openai: { label: 'LM Studio / compatibile OpenAI', url: 'http://localhost:1234/v1' },
 };
 const MAX_HISTORY = 14;   // messaggi recenti inviati: i modelli piccoli hanno poco contesto
-const NUM_CTX = 16384;    // contesto richiesto a Ollama (il suo predefinito tronca il prompt)
+const NUM_CTX = 24576;    // contesto richiesto a Ollama (il suo predefinito tronca il prompt)
 const TIMEOUT_MS = 240000;
 
 const LOCAL_HINT = `
