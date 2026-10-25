@@ -4,29 +4,29 @@
   font: 500 14px Oswald, sans-serif; letter-spacing: .05em; text-transform: uppercase;
   padding: 8px 14px; box-shadow: 0 3px 10px rgba(0,0,0,.5);
 }
-#gov-toggle.on { border-color: var(--gold); color: var(--gold); }
+#gov-toggle.on { border-color: var(--brass); color: var(--brass); }
 
 #gov-win {
   position: fixed; right: 16px; bottom: 60px; z-index: 41;
   width: min(440px, calc(100vw - 32px)); height: min(640px, calc(100vh - 120px));
   display: flex; flex-direction: column;
-  background: var(--panel); border: 1px solid var(--gold); border-radius: 4px;
+  background: var(--steel-1); border: 1px solid var(--brass); border-radius: 4px;
   box-shadow: 0 8px 30px rgba(0,0,0,.6);
 }
-#gov-win header { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel2); border-bottom: 1px solid var(--line); }
-#gov-win header > b { flex: 1; font: 500 15px Oswald, sans-serif; letter-spacing: .04em; color: var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#gov-win header { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--steel-2); border-bottom: 1px solid var(--steel-4); }
+#gov-win header > b { flex: 1; font: 500 15px Oswald, sans-serif; letter-spacing: .04em; color: var(--brass); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #gov-win nav { display: flex; }
 #gov-win nav button { border-radius: 0; margin-left: -1px; padding: 3px 8px; font-size: 12px; }
-#gov-win nav button.on { background: linear-gradient(#8a6d2a, #6a521d); border-color: var(--gold); position: relative; }
+#gov-win nav button.on { background: linear-gradient(#8a6d2a, #6a521d); border-color: var(--brass); position: relative; }
 #gov-win header .x { padding: 2px 7px; }
 
 #gov-body { flex: 1; overflow-y: auto; padding: 10px; }
 #gov-body h4 { margin: 14px 0 6px; font: 500 13px Oswald, sans-serif; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
-#gov-body a { color: var(--gold); }
+#gov-body a { color: var(--brass); }
 
 .gl { margin: 0 0 8px; padding: 7px 10px; border-radius: 4px; line-height: 1.45; max-width: 92%; word-wrap: break-word; }
 .gl.me { margin-left: auto; background: #3a3220; border: 1px solid #6d5a2c; }
-.gl.gov { background: var(--panel2); border: 1px solid var(--line); }
+.gl.gov { background: var(--steel-2); border: 1px solid var(--steel-4); }
 .gl.info { color: var(--muted); font-style: italic; max-width: 100%; }
 .gl.err { color: #f0a090; background: rgba(224,80,60,.12); border: 1px solid rgba(224,80,60,.4); max-width: 100%; }
 .gl.act { padding: 2px 10px; font-size: 12px; max-width: 100%; }
@@ -37,25 +37,25 @@
 .gov-ex { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .gov-ex button { text-align: left; }
 
-#gov-form { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
+#gov-form { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--steel-4); }
 #gov-input {
   flex: 1; resize: none; font: inherit; color: var(--text); background: var(--bg);
-  border: 1px solid var(--line); border-radius: 3px; padding: 6px 8px;
+  border: 1px solid var(--steel-4); border-radius: 3px; padding: 6px 8px;
 }
-#gov-input:focus { outline: none; border-color: var(--gold); }
+#gov-input:focus { outline: none; border-color: var(--brass); }
 
 .gov-key { display: flex; gap: 6px; margin: 6px 0; }
 .gov-key input, #gov-model {
-  flex: 1; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 5px 8px;
+  flex: 1; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--steel-4); border-radius: 3px; padding: 5px 8px;
 }
-#gov-body select { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 5px 8px; }
+#gov-body select { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--steel-4); border-radius: 3px; padding: 5px 8px; }
 
 table.gov-rel { width: 100%; border-collapse: collapse; font-size: 12px; }
 .gov-rel td { padding: 3px 4px; border-bottom: 1px solid rgba(255,255,255,.05); white-space: nowrap; }
 .gov-rel tr:hover td { background: rgba(255,255,255,.04); }
 .gov-rel .num { text-align: right; width: 34px; font-variant-numeric: tabular-nums; }
 .gov-rel .dim { color: var(--muted); }
-.gov-rel .tag { display: inline-block; font-size: 10px; padding: 0 4px; margin-right: 3px; border: 1px solid var(--line); border-radius: 2px; }
+.gov-rel .tag { display: inline-block; font-size: 10px; padding: 0 4px; margin-right: 3px; border: 1px solid var(--steel-4); border-radius: 2px; }
 .gov-rel .tag.bad { border-color: var(--red); }
 .gov-rel .tag.good { border-color: var(--green); }
 .gov-rel .opbar { position: relative; width: 90px; }

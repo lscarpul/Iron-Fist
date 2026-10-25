@@ -23,17 +23,18 @@ var GameActions = {
   // definizioni per l'API (ordinate per nome, così restano identiche per tutta la conversazione)
   // Le azioni "fallback" (diplomazia ed economia di base) spariscono quando è caricato il modulo
   // che possiede quell'area (Diplo, Econ), così l'IA non vede doppioni.
-  active() {
-    return this._list.filter(a => !a.fallback || !moduleLoaded(a.fallback));
+  // mode: 'government' (solo azioni del nostro governo) o 'narrator' (anche le modifiche libere del mondo)
+  active(mode = 'government') {
+    return this._list.filter(a => (!a.fallback || !moduleLoaded(a.fallback)) && (!a.mode || a.mode === mode));
   },
-  tools() {
-    return [...this.active()].sort((a, b) => a.name < b.name ? -1 : 1).map(a => ({
+  tools(mode) {
+    return [...this.active(mode)].sort((a, b) => a.name < b.name ? -1 : 1).map(a => ({
       name: a.name, description: a.description,
       input_schema: a.input_schema || { type: 'object', properties: {} },
     }));
   },
-  exec(name, input) {
-    const a = this.active().find(x => x.name === name);
+  exec(name, input, mode) {
+    const a = this.active(mode).find(x => x.name === name);
     if (!a) return { ok: false, error: `Azione sconosciuta: ${name}` };
     try {
       const r = a.run(input || {});
@@ -321,7 +322,7 @@ function findCountry(q) {
   if (q == null) throw new Error('Paese non indicato');
   const s = String(q).trim();
   if (S.countries[s]) return s;
-  if (S.countries[s.toUpperCase()] && s.length === 1) return s.toUpperCase();
+  if (s.length <= 3 && S.countries[s.toUpperCase()]) return s.toUpperCase();
   const norm = x => x.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '');
   const n = norm(s);
   const ALIAS = { germany: 'G', reich: 'G', france: 'F', uk: 'U', inghilterra: 'U', granbretagna: 'U', britain: 'U', unitedkingdom: 'U', italy: 'I', urss: 'S', russia: 'S', sovietunion: 'S', unionesovietica: 'S', poland: 'P', spain: 'E', portugal: 'O', belgio: 'B', olanda: 'B', paesibassi: 'B', denmark: 'D', norway: 'N', sweden: 'W', finland: 'K', baltici: 'X', estonia: 'X', lettonia: 'X', lituania: 'X', czechoslovakia: 'C', hungary: 'H', yugoslavia: 'Y', greece: 'Q', turkey: 'T', switzerland: 'Z' };
@@ -705,14 +706,21 @@ function gameStateText() {
   L.push(`Cantieri: ${p.construction.length ? p.construction.map((j, i) => `[${i}] ${j.type} ${Math.round(100 * j.prog / j.cost)}%`).join(', ') : 'nessuno'}.`);
   L.push(`Focus: ${p.focus ? `${focusOf(p, p.focus).name} (${p.focusDays} g)` : 'nessuno'}. Disponibili: ${focusList(p).filter(f => focusAvailable(p, f)).map(f => `${f.id} "${f.name}" ${f.days}g${f.desc || f.d ? `: ${f.desc || f.d}` : ''}`).join(' | ') || 'nessuno'}.`);
   L.push(`Fazione: ${p.faction ? S.factions[p.faction].name : 'nessuna'}. Nemici: ${enemiesOf(pc).map(e => C(e).name).join(', ') || 'nessuno'}. Garantiamo: ${S.guarantees.filter(g => g.by === pc).map(g => C(g.to).name).join(', ') || 'nessuno'}. Patti di non aggressione: ${relPacts(pc).map(k => C(k).name).join(', ') || 'nessuno'}.`);
-  L.push('Paesi (codice, nome, fazione, fabbriche civ/mil, divisioni, rapporto con noi, opinione loro→noi / noi→loro):');
+  // nel mondo intero i paesi sono tanti: per esteso solo quelli che contano per noi, gli altri solo per nome
+  const near = new Set();
+  for (const t of S.tiles) if (t.land && t.owner === pc) for (const n of t.nb) { const o = S.tiles[n].owner; if (o && o !== pc) near.add(o); }
+  const relevant = k => { const c = S.countries[k]; return c.major || near.has(k) || atWar(pc, k) || allied(pc, k) || Math.abs(relOpinion(k, pc)) >= 30 || S.guarantees.some(g => (g.by === pc && g.to === k) || (g.by === k && g.to === pc)); };
+  const others = [];
+  L.push('Paesi principali e vicini (codice, nome, fazione, fabbriche civ/mil, divisioni, rapporto con noi, opinione loro→noi / noi→loro):');
   for (const k in S.countries) {
     const c = S.countries[k];
     if (!c.alive || k === pc) continue;
+    if (!relevant(k)) { others.push(`${k} ${c.name}`); continue; }
     const st = atWar(pc, k) ? 'GUERRA' : allied(pc, k) ? 'alleato' : 'neutrale';
     const ew = enemiesOf(k);
     L.push(`- ${k} ${c.name}${c.major ? ' (grande potenza)' : ''}, ${c.faction ? S.factions[c.faction].name : 'nessuna fazione'}, ${c.civ}/${c.mil}, ${S.divs.filter(d => d.owner === k && !d.dead).length} div, ${st}, ${relOpinion(k, pc)}/${relOpinion(pc, k)}${ew.length ? `, in guerra con ${ew.map(e => C(e).name).join(', ')}` : ''}`);
   }
+  if (others.length) L.push(`Altri paesi: ${others.join(', ')}.`);
   const gone = Object.values(S.countries).filter(c => !c.alive).map(c => c.name);
   if (gone.length) L.push(`Paesi scomparsi: ${gone.join(', ')}.`);
   if (typeof DiploAPI !== 'undefined' && DiploAPI.summary) { try { L.push(DiploAPI.summary(pc)); } catch (e) { /* ignora */ } }

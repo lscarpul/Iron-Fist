@@ -41,6 +41,7 @@ Per pubblicare una versione: aggiorna `version` in `package.json`, poi crea e in
 - **Occupazione**: guarnigioni, resistenza e conformità per territorio, leggi di occupazione, sabotaggi e insurrezioni, governi collaborazionisti.
 - **Eventi storici**: Anschluss, Monaco, Polonia 1939, Weserübung, Barbarossa…
 - **IA** che costruisce, recluta, presidia il fronte, attacca quando è in vantaggio e tenta sbarchi.
+- **Governo a parole** (tasto T): un'IA, locale con Ollama (es. Qwen 2.5 7B) o Claude, interpreta gli ordini scritti ed esegue diplomazia, economia, ricerca e focus. In modalità **Narratore**, come l'IA di Pax Historia, giudica cosa è plausibile e cambia il mondo: fonda città con punti vittoria, sposta regioni, fa nascere o annette nazioni, cambia regimi e capi, fa scoppiare guerre o firmare paci, e ogni qualche mese pubblica un notiziario di eventi.
 - **Capitolazione** quando un paese perde gran parte del territorio: il governo resta in esilio finché i suoi alleati combattono, poi si tiene la conferenza di pace.
 
 ## Struttura

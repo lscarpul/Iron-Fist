@@ -12,6 +12,10 @@ const Gov = {
   lines: [],        // cosa mostra la chat: { who: 'me'|'gov'|'act'|'err'|'info', text, ok }
   status: null,
   MAX_STEPS: 15,
+  // narrator = come l'IA di Pax Historia: oltre al governo può cambiare liberamente il mondo
+  mode: pref('gov-mode', 'narrator'),
+  newsEvery: +pref('gov-news', '3'),   // mesi di gioco tra un notiziario e l'altro (0 = mai)
+  newsBusy: false,
   MAX_CONV: 120,
 
   api() { return window.governoAPI || null; },
@@ -67,6 +71,7 @@ const Gov = {
     setInterval(() => {
       btn.classList.toggle('hidden', !S);
       if (this.open && this.view === 'rel' && S) this.render();
+      this.newsTick();
     }, 1000);
   },
 
@@ -192,6 +197,17 @@ const Gov = {
       <select id="gov-model">${s.models.map(m => `<option value="${m.id}" ${m.id === s.model ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select>`;
     }
     return h + `
+      <h4>Modalità</h4>
+      <select id="gov-mode">
+        <option value="narrator" ${this.mode === 'narrator' ? 'selected' : ''}>Narratore libero, come Pax Historia: può cambiare il mondo</option>
+        <option value="government" ${this.mode === 'government' ? 'selected' : ''}>Solo governo: diplomazia ed economia con le regole del gioco</option>
+      </select>
+      <p class="hint">Da narratore il governo giudica cosa è plausibile e può fondare città, spostare confini, far nascere nazioni, cambiare regimi e pubblicare notizie.</p>
+      <h4>Notiziario del mondo</h4>
+      <select id="gov-news" ${this.mode === 'narrator' ? '' : 'disabled'}>
+        ${[[0, 'Mai'], [1, 'Ogni mese'], [3, 'Ogni 3 mesi'], [6, 'Ogni 6 mesi'], [12, 'Ogni anno']].map(([v, l]) => `<option value="${v}" ${this.newsEvery === v ? 'selected' : ''}>${l}</option>`).join('')}
+      </select>
+      <p class="hint">Il narratore inventa eventi plausibili nel mondo (colpi di stato, crisi, nuove città, trattati) a intervalli regolari di tempo di gioco.</p>
       <h4>Conversazione</h4>
       <button data-gov="reset">Ricomincia la conversazione</button>
       <p class="hint">Il governo ricorda gli scambi precedenti di questa partita. Ricominciare la svuota (non annulla le azioni già fatte).</p>`;
@@ -231,6 +247,8 @@ const Gov = {
   async change(id, value) {
     const api = this.api();
     let r = null;
+    if (id === 'gov-mode') { this.mode = value === 'government' ? 'government' : 'narrator'; savePref('gov-mode', this.mode); this.tools = null; this.render(); return; }
+    if (id === 'gov-news') { this.newsEvery = +value || 0; savePref('gov-news', String(this.newsEvery)); if (S) S.lastNewsDay = S.day; return; }
     if (id === 'gov-provider') { r = await api.setProvider(value); this.tools = null; if (value === 'local') setTimeout(() => this.scanLocal(), 0); }
     else if (id === 'gov-model') r = await api.setModel(value);
     else if (id === 'gov-lkind') {
@@ -245,7 +263,10 @@ const Gov = {
   },
 
   // ---------- conversazione con il modello ----------
-  buildSystem() {
+  buildSystem(mode) {
+    return this.governmentPrompt() + (mode === 'narrator' ? NARRATOR_PROMPT : '');
+  },
+  governmentPrompt() {
     const p = C(S.player);
     return `Sei il governo di ${p.name} in Iron Fist, un gioco di grande strategia ambientato in Europa tra il 1936 e il 1946 sul modello di Hearts of Iron IV. Il giocatore è il capo della nazione: ti scrive ordini, domande e messaggi in italiano, in linguaggio naturale. Tu interpreti cosa vuole e lo realizzi con gli strumenti a disposizione, che sono le uniche azioni diplomatiche ed economiche possibili nel gioco.
 
@@ -271,7 +292,7 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
     this.ensureGame();
     inp.value = '';
     this.lines.push({ who: 'me', text });
-    if (!this.tools || this.conv.length > this.MAX_CONV) this.startConversation();
+    if (!this.tools || this.convMode !== this.mode || this.conv.length > this.MAX_CONV) this.startConversation();
     const userBlocks = [
       { type: 'text', text: `<stato_partita>\n${gameStateText()}\n</stato_partita>` },
       { type: 'text', text },
@@ -287,7 +308,7 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
     this.busy = true;
     this.render();
     try {
-      await this.loop();
+      await this.loop(this.conv, this.system, this.tools, this.convMode);
     } finally {
       this.busy = false;
       if (!wasPaused && !S.over && S.paused) S.paused = false;
@@ -302,29 +323,30 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
       ? this.lines.filter(l => l.who === 'me' || l.who === 'gov').slice(-8).map(l => `${l.who === 'me' ? 'Leader' : 'Governo'}: ${l.text}`).join('\n')
       : '';
     this.conv = [];
-    this.tools = GameActions.tools();
-    this.system = this.buildSystem();
+    this.convMode = this.mode;
+    this.tools = GameActions.tools(this.mode);
+    this.system = this.buildSystem(this.mode);
     if (recap) {
       this.conv.push({ role: 'user', content: [{ type: 'text', text: `Riassunto degli ultimi scambi (la conversazione precedente è stata chiusa perché troppo lunga):\n${recap}` }] });
       this.conv.push({ role: 'assistant', content: [{ type: 'text', text: 'Ricevuto, proseguiamo da qui.' }] });
     }
   },
 
-  async loop() {
+  async loop(conv, system, tools, mode) {
     const api = this.api();
     const game = S;
     for (let step = 0; step < this.MAX_STEPS; step++) {
-      const r = await api.send({ system: this.system, tools: this.tools, messages: this.conv });
+      const r = await api.send({ system, tools, messages: conv });
       if (S !== game) return; // nel frattempo è iniziata un'altra partita
       if (!r.ok) {
         // una richiesta fallita al primo passo non lascia traccia: si toglie l'ordine non risposto
-        if (step === 0) this.conv.pop();
+        if (step === 0) conv.pop();
         this.lines.push({ who: 'err', text: r.error });
         if (r.kind === 'auth' || r.kind === 'nokey') this.refreshStatus();
         return;
       }
       const m = r.message;
-      this.conv.push({ role: 'assistant', content: m.content });
+      conv.push({ role: 'assistant', content: m.content });
       for (const b of m.content) if (b.type === 'text' && b.text.trim()) this.lines.push({ who: 'gov', text: b.text.trim() });
       this.render();
       if (m.stop_reason === 'refusal') { this.lines.push({ who: 'err', text: 'Il governo non può dar seguito a questa richiesta.' }); return; }
@@ -334,22 +356,51 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
       const results = [];
       for (const b of m.content) {
         if (b.type !== 'tool_use') continue;
-        const res = GameActions.exec(b.name, b.input);
+        const res = GameActions.exec(b.name, b.input, mode);
         const label = actionLabel(b.name, b.input);
         const refused = res.ok && /"esito":"RIFIUTATO"/.test(res.result);
         if (label) this.lines.push({ who: 'act', ok: res.ok && !refused, text: !res.ok ? `${label}: ${res.error}` : refused ? `${label}: rifiutata` : label });
         results.push({ type: 'tool_result', tool_use_id: b.id, content: res.ok ? res.result : res.error, ...(res.ok ? {} : { is_error: true }) });
       }
-      this.conv.push({ role: 'user', content: results });
+      conv.push({ role: 'user', content: results });
       this.render();
     }
     this.lines.push({ who: 'err', text: 'Troppi passaggi per un solo ordine: mi fermo qui.' });
+  },
+
+  // ---------- notiziario: eventi del mondo generati dal narratore ----------
+  newsTick() {
+    if (!S || S.over || this.mode !== 'narrator' || !this.newsEvery || this.busy || this.newsBusy) return;
+    if (!this.status?.ready) return;
+    if (S.lastNewsDay == null) { S.lastNewsDay = S.day; return; }
+    if (S.day - S.lastNewsDay < this.newsEvery * 30) return;
+    S.lastNewsDay = S.day;
+    this.generateNews();
+  },
+  async generateNews() {
+    const game = S;
+    this.newsBusy = true;
+    this.ensureGame();
+    this.lines.push({ who: 'info', text: `📰 Notiziario del ${dateLabel(S.day)}` });
+    this.render();
+    const conv = [{ role: 'user', content: [{ type: 'text', text: `<stato_mondo>\n${worldStateText()}\n</stato_mondo>\n\n<stato_partita>\n${gameStateText()}\n</stato_partita>\n\nSono passati ${this.newsEvery} mesi dall'ultimo notiziario. Racconta da 1 a 3 eventi plausibili accaduti nel mondo in questo periodo e applicane le conseguenze con gli strumenti.` }] }];
+    try {
+      await this.loop(conv, NEWS_PROMPT, GameActions.tools('narrator'), 'narrator');
+    } finally {
+      if (S === game) this.newsBusy = false;
+      else this.newsBusy = false;
+      this.render();
+    }
   },
 };
 
 // Etichetta leggibile di un'azione nella chat (null = azione di sola lettura, non mostrata)
 function actionLabel(name, input) {
   if (name === 'country_report') return null;
+  if (name === 'notizia') return `📰 ${input.titolo || 'Notizia'}`;
+  if (name === 'crea_citta') return `Nuova città: ${input.nome} (${input.luogo})`;
+  if (name === 'cedi_regioni') return `Regioni a ${input.a}: ${input.regioni}`;
+  if (name === 'crea_nazione') return `Nuova nazione: ${input.nome}`;
   const cn = () => { try { return C(findCountry(input.country)).name; } catch (e) { return input.country; } };
   switch (name) {
     case 'improve_relations': return `Missione diplomatica: ${cn()}`;
@@ -379,6 +430,22 @@ function actionLabel(name, input) {
     }
   }
 }
+
+// preferenze per questo PC (localStorage può mancare: si usano i valori predefiniti)
+function pref(k, d) { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } }
+function savePref(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* non salvata */ } }
+
+const NARRATOR_PROMPT = `
+
+Modalità narratore (come l'IA di Pax Historia): oltre a governare sei anche il narratore e arbitro del mondo. Hai strumenti per cambiarlo liberamente: fondare città con punti vittoria, rinominarle, spostare regioni tra paesi, far nascere o annettere nazioni, cambiare regimi e capi di stato, far scoppiare guerre o firmare paci tra paesi qualsiasi, cambiare rapporti, risorse e truppe, pubblicare notizie.
+- Quando il leader descrive un'azione libera ("costruisco una nuova città sul Baltico", "finanzio un colpo di stato in Romania", "compro l'Alaska dagli USA"), giudica cosa è plausibile con i suoi mezzi, il periodo storico e la reazione degli altri paesi, poi applica l'esito con gli strumenti. Le azioni ambiziose possono riuscire solo in parte, fallire o costare: in quel caso togli risorse al giocatore (potere politico, fabbriche, equipaggiamento) con modifica_risorse.
+- Per le azioni che il gioco già regola (dichiarazioni di guerra del giocatore, proposte diplomatiche, costruzioni, focus) usa le azioni di governo, non quelle libere.
+- Fai reagire il mondo: dopo un cambiamento importante pubblica una notizia e, se serve, cambia i rapporti dei paesi coinvolti.
+- Mantieni il mondo coerente: usa i nomi delle regioni e delle città che esistono sulla mappa, non togliere territori a paesi in guerra senza una pace, non creare cose assurde per il 1936-1946 a meno che il leader non lo chieda espressamente per gioco.`;
+
+const NEWS_PROMPT = `Sei il narratore di Iron Fist, un gioco di grande strategia sul modello di Hearts of Iron IV ambientato nel mondo tra il 1936 e il 1946. Ogni qualche mese di gioco racconti cosa succede nel mondo, come fa l'IA di Pax Historia.
+
+Ricevi lo stato del mondo e della nazione del giocatore. Inventa da 1 a 3 eventi plausibili per il periodo e la situazione (crisi politiche, colpi di stato, elezioni, trattati, scoperte, rivolte, nuove città, catastrofi, mosse delle grandi potenze), ispirandoti alla storia reale ma reagendo a come la partita è andata davvero. Per ogni evento pubblica una notizia con lo strumento notizia e applicane le conseguenze concrete con gli altri strumenti (cambia_governo, cambia_rapporti, modifica_risorse, crea_citta, cedi_regioni, crea_nazione, schiera_divisioni, guerra_tra...). Non decidere al posto del giocatore e non fargli dichiarare guerre: gli eventi possono toccarlo, ma le sue scelte restano sue. Tieni gli effetti proporzionati. Alla fine scrivi una sola frase di riepilogo in italiano.`;
 
 function richText(s) {
   return esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
