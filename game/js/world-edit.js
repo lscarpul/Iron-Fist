@@ -339,6 +339,8 @@ const WorldEdit = {
   annexNation(by, target) {
     const x = this.country(by), y = this.country(target);
     if (x === y) throw new Error('Paese uguale');
+    // il giocatore annette solo con le regole del gioco (obiettivo di guerra, pretesa, pace)
+    if (x === S.player) throw new Error('Le annessioni del giocatore passano da giustifica_obiettivo_guerra (poi guerra) o pretesa_annessione, solo se le chiede esplicitamente');
     if (atWar(x, y)) throw new Error('Sono in guerra: serve vincerla');
     annex(x, y);
     return `${C(x).name} ha annesso ${C(y).name}.`;
@@ -400,7 +402,7 @@ function worldStateText() {
   reg('crea_nazione', 'Fa nascere una nuova nazione da una o più regioni (stati o città) di paesi esistenti: secessioni, indipendenze, stati fantoccio.',
     { nome: S_('Nome della nuova nazione'), regioni: S_('Regioni o città che la formano, separate da virgola'), ideologia: S_('democrazia, fascismo, comunismo o non allineato'), capo: S_('Capo di stato (facoltativo)'), colore: S_('Colore #rrggbb (facoltativo)') },
     ['nome', 'regioni'], a => WorldEdit.createNation(a.nome, a.regioni, a.ideologia, a.capo, a.colore));
-  reg('annetti_paese', 'Un paese ne annette pacificamente un altro (unione, Anschluss).',
+  reg('annetti_paese', 'Evento tra altri paesi: uno ne annette pacificamente un altro (unione, Anschluss). Non per il giocatore: le sue annessioni passano da giustifica_obiettivo_guerra e pretesa_annessione.',
     { annessore: S_('Paese che annette'), paese: S_('Paese annesso') }, ['annessore', 'paese'], a => WorldEdit.annexNation(a.annessore, a.paese));
   reg('cambia_governo', 'Cambia regime e/o capo di stato di un paese (colpo di stato, rivoluzione, elezioni).',
     { paese: S_('Paese'), ideologia: S_('democrazia, fascismo, comunismo o non allineato (facoltativo)'), capo: S_('Nuovo capo di stato (facoltativo)') },
