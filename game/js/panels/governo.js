@@ -368,6 +368,7 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
   async loop(conv, system, tools, mode) {
     const api = this.api();
     const game = S;
+    let acted = false, nudged = false;
     for (let step = 0; step < this.MAX_STEPS; step++) {
       const r = await api.send({ system, tools, messages: conv });
       if (S !== game) return; // nel frattempo è iniziata un'altra partita
@@ -380,12 +381,21 @@ Rispondi in italiano, in modo conciso (di solito da due a sei frasi), con il ton
       }
       const m = r.message;
       conv.push({ role: 'assistant', content: m.content });
+      const said = m.content.filter(b => b.type === 'text').map(b => b.text).join(' ');
+      // i modelli piccoli a volte raccontano un'azione senza chiamare lo strumento: nel gioco non è
+      // successo nulla. Una volta per ordine si richiama il modello invece di mostrare la risposta.
+      if (m.stop_reason !== 'tool_use' && !acted && !nudged && this.status?.provider === 'local' && CLAIMS_ACTION.test(normText(said))) {
+        nudged = true;
+        conv.push({ role: 'user', content: [{ type: 'text', text: 'Non hai chiamato nessuno strumento, quindi nel gioco non è successo nulla. Se l\'ordine richiede un\'azione, chiama adesso lo strumento giusto; se nessuno strumento lo permette, dillo al leader.' }] });
+        continue;
+      }
       for (const b of m.content) if (b.type === 'text' && b.text.trim()) this.lines.push({ who: 'gov', text: b.text.trim() });
       this.render();
       if (m.stop_reason === 'refusal') { this.lines.push({ who: 'err', text: 'Il governo non può dar seguito a questa richiesta.' }); return; }
       if (m.stop_reason === 'max_tokens') { this.lines.push({ who: 'err', text: 'Risposta interrotta perché troppo lunga.' }); return; }
       if (m.stop_reason === 'pause_turn') continue;
       if (m.stop_reason !== 'tool_use') return;
+      acted = true;
       const results = [];
       for (const b of m.content) {
         if (b.type !== 'tool_use') continue;
@@ -490,6 +500,8 @@ const TOOL_GROUPS = [
 // strumenti del narratore (cambiano il mondo) e parole che li richiamano
 const WORLD_WORDS = /citt|fond|region|provinc|nazion|indipend|govern|regim|capo di|leader|notizi|rinomin|capital|confin|colpo di stato|punti vittoria|separat|rivolt|elezion|cedi|cession|territor|schier|evento|inventa|nasce|nuov[oa] stato/;
 const NEWS_TOOLS = /notizia|cambia_governo|cambia_rapporti|modifica_risorse|crea_citta|cedi_regioni|crea_nazione|schiera_divisioni|guerra_tra|pace_tra|elenca_regioni|rinomina_nazione/;
+// frasi con cui il modello dice di aver già fatto qualcosa ("ho firmato", "abbiamo ceduto"...)
+const CLAIMS_ACTION = /\b(ho|abbiamo|e stat[oaie]|sono stat[ie])\s+(gia\s+|appena\s+|ora\s+)?(firmat|propost|avviat|ceduto|cedut|costruit|dichiarat|inviat|concluso|conclus|stretto|stipulat|annesso|annes|iniziat|ordinat|creat|fondat|migliorat|garantit|chiesto|offert|accettat|reclutat|addestrat|scelt|impostat|cambiat|spostat)|\b(firmato|ceduto|annesso|fondato|dichiarato guerra|stipulato)\b/;
 function normText(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
 function pickTools(all, text, mode) {
   const t = normText(text);
