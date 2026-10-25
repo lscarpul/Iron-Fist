@@ -2,6 +2,7 @@
 // Avvio dell'app desktop: apre il gioco (cartella game/) in una finestra nativa.
 const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
+const governo = require('./ai-bridge');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -10,13 +11,15 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 640,
     title: 'Iron Fist',
-    backgroundColor: '#11151a',
+    icon: path.join(__dirname, '..', 'game', 'img', 'icon.png'),
+    backgroundColor: '#0d0f0e',
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
   win.once('ready-to-show', () => { win.maximize(); win.show(); });
@@ -36,5 +39,5 @@ function createWindow() {
 }
 
 Menu.setApplicationMenu(null);
-app.whenReady().then(createWindow);
+app.whenReady().then(() => { governo.register(); createWindow(); });
 app.on('window-all-closed', () => app.quit());

@@ -2,24 +2,18 @@
 
 function aiThink(c) {
   // focus nazionale
-  if (!c.focus) {
-    const order = c.major ? AI_FOCUS_MAJOR : AI_FOCUS_MINOR;
-    const id = order.find(id => focusAvailable(c, FOCUS_BY_ID[id]));
-    if (id) startFocus(c, id);
-  }
-  // costruzione
-  if (!c.construction.length && canBuild(c)) {
-    const tense = enemiesOf(c.code).length > 0 || S.day > 730;
-    queueBuild(c, Math.random() < (tense ? 0.75 : 0.35) ? 'mil' : 'civ');
-  }
+  aiPickFocus(c);
+  // economia: leggi, linee di produzione, commercio, cantieri (economy.js)
+  Econ.aiThink(c);
   // reclutamento
   const myDivs = S.divs.filter(d => d.owner === c.code && !d.dead);
   const cap = Math.floor(c.mil * 1.2 + c.civ * 0.4) + 4;
   for (let k = 0; k < 2; k++) {
     if (myDivs.length + c.training.length >= cap) break;
-    const type = c.armorTech && Math.random() < 0.22 ? 'arm' : 'inf';
-    if (c.equipment < UNIT_TYPES[type].eq * 1.3 || !recruit(c, type)) break;
+    const tpl = aiPickTemplate(c);
+    if (!tpl || !Econ.canPay(c, tplKey(c, tpl), 1, 1.3) || !recruit(c, tpl.id)) break;
   }
+  if ((S.day + c.slot * 11) % 30 === 0) aiLogistics(c);
   aiMilitary(c, myDivs);
 }
 
@@ -85,7 +79,7 @@ function aiMilitary(c, my) {
     const threshold = 2.0 - c.aggro;
     const groups = new Map();
     for (const d of my) {
-      if (d.path.length || !frontSet.has(d.tile) || d.org < UNIT_TYPES[d.type].org * 0.7) continue;
+      if (d.path.length || !frontSet.has(d.tile) || d.org < divMaxOrg(d) * 0.7) continue;
       let g = groups.get(d.tile);
       if (!g) { g = []; groups.set(d.tile, g); }
       g.push(d);
@@ -125,7 +119,7 @@ function aiMilitary(c, my) {
 
   // rinforza il fronte: Dijkstra multi-sorgente dal fronte, pesato dalle truppe già assegnate,
   // ricalcolato a lotti così le divisioni si distribuiscono lungo tutto il fronte
-  const idle = my.filter(d => !d.path.length && !frontSet.has(d.tile) && d.org >= UNIT_TYPES[d.type].org * 0.3);
+  const idle = my.filter(d => !d.path.length && !frontSet.has(d.tile) && d.org >= divMaxOrg(d) * 0.3);
   if (!idle.length) return;
   const batch = Math.max(4, Math.ceil(idle.length / 10));
   for (let i = 0; i < idle.length; i += batch) {
@@ -166,7 +160,7 @@ function dijkstraFromFront(owner, front, cnt, threat) {
 }
 
 function aiNaval(c, my, targets, maxDivs) {
-  const ready = my.filter(d => !d.path.length && S.tiles[d.tile].land && d.org >= UNIT_TYPES[d.type].org * 0.9 && d.str > 0.8);
+  const ready = my.filter(d => !d.path.length && S.tiles[d.tile].land && d.org >= divMaxOrg(d) * 0.9 && d.str > 0.8);
   if (ready.length < maxDivs + 2) return;
   const origin = ready[0].tile;
   const { dist, prev } = dijkstra(c.code, origin, -1, false, 80);
@@ -185,4 +179,15 @@ function aiNaval(c, my, targets, maxDivs) {
     const p = findPath(c.code, d.tile, best);
     if (p && p.length) { d.path = p; d.prog = 0; sent++; }
   }
+}
+
+// sceglie il modello di divisione da addestrare (fanteria, a volte corazzate o forze speciali)
+function aiPickTemplate(c) {
+  const ok = c.templates.filter(t => !tplAvailable(c, t));
+  if (!ok.length) return null;
+  const arm = ok.filter(t => t.stats.kind === 'arm'), spec = ok.filter(t => t.stats.special), inf = ok.filter(t => t.stats.kind === 'inf' && !t.stats.special);
+  const r = Math.random();
+  const pool = (r < 0.22 && arm.length) ? arm : (r < 0.3 && spec.length) ? spec : (inf.length ? inf : ok);
+  const tpl = pool[Math.floor(Math.random() * pool.length)];
+  return landCanPay(c, tpl, 1.3) ? tpl : null;
 }

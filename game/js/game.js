@@ -18,10 +18,15 @@ function dateLabel(d) {
 function allied(a, b) {
   if (a === b) return true;
   if (!a || !b) return false;
-  const fa = C(a).faction;
-  return !!fa && fa === C(b).faction;
+  // un suddito è alleato del suo signore e ne segue la fazione
+  const ta = Diplo.top(a), tb = Diplo.top(b);
+  if (ta === tb) return true;
+  const fa = C(ta).faction;
+  return !!fa && fa === C(tb).faction;
 }
-const warKey = (a, b) => a < b ? a + b : b + a;
+// i codici possono avere più lettere (tag HOI4): il separatore evita ambiguità
+const warKey = (a, b) => a < b ? a + '|' + b : b + '|' + a;
+const warSides = k => k.split('|');
 function atWar(a, b) { return !!a && !!b && a !== b && S.wars.has(warKey(a, b)); }
 function enemiesOf(code) {
   const r = [];
@@ -29,8 +34,11 @@ function enemiesOf(code) {
   return r;
 }
 function membersOf(code) {
-  const c = C(code);
-  return c.faction ? S.factions[c.faction].members.slice() : [code];
+  const top = Diplo.top(code), c = C(top);
+  const base = c.faction ? S.factions[c.faction].members : [top];
+  const r = new Set();
+  for (const m of base) { r.add(m); for (const s of Diplo.subjectsOf(m)) r.add(s); }
+  return [...r];
 }
 function log(msg, cls = '') {
   S.log.unshift({ day: S.day, msg, cls });
@@ -53,9 +61,10 @@ function remDivFromTile(d) {
   if (!a.length) S.byTile.delete(d.tile);
 }
 function moveDiv(d, to) { remDivFromTile(d); d.tile = to; addDivToTile(d); }
-function createDiv(owner, type, tile) {
+function createDiv(owner, type, tile, tpl) {
   const c = C(owner);
-  const d = { id: S.nextId++, num: ++c.divCounter, owner, type, tile, str: 1, org: UNIT_TYPES[type].org, path: [], prog: 0, combat: false, dead: false };
+  const d = { id: S.nextId++, num: ++c.divCounter, owner, type, tile, str: 1, org: 0, path: [], prog: 0, combat: false, dead: false };
+  initDivLand(d, tpl ?? type);
   S.divs.push(d);
   addDivToTile(d);
   return d;
@@ -66,32 +75,14 @@ function destroyDiv(d) {
   d.dead = true;
   d.path = [];
 }
-function divName(d) { return `${d.num}ª ${UNIT_TYPES[d.type].name}`; }
+function divName(d) { return `${d.num}ª ${tplOf(d).name}`; }
 function hasHostile(ti, owner) {
   const a = S.byTile.get(ti);
   if (!a) return false;
   for (const d of a) if (!d.dead && atWar(d.owner, owner)) return true;
   return false;
 }
-function speedOf(d) { return UNIT_TYPES[d.type].speed * (1 + C(d.owner).speedBonus); }
-function atkValue(d, ti) {
-  const ut = UNIT_TYPES[d.type];
-  let v = ut.atk * (1 + C(d.owner).atkBonus) * d.str * (0.4 + 0.6 * d.org / ut.org);
-  if (d.type === 'arm' && ti != null) v *= TERRAIN[S.tiles[ti].terrain].arm;
-  if (!S.tiles[d.tile].land) v *= 0.5; // sbarco dal mare
-  return v;
-}
-function defValueOf(d) {
-  const ut = UNIT_TYPES[d.type];
-  return ut.def * (1 + C(d.owner).defBonus) * d.str * (0.4 + 0.6 * d.org / ut.org);
-}
-function defValue(ti, vsOwner) {
-  const a = S.byTile.get(ti);
-  if (!a) return 0;
-  let D = 0;
-  for (const d of a) if (!d.dead && atWar(d.owner, vsOwner)) D += defValueOf(d);
-  return D * TERRAIN[S.tiles[ti].terrain].def;
-}
+// speedOf, atkValue, defValueOf, defValue: vedi land/combat.js
 
 // ---------- percorsi ----------
 function passable(owner, t, friendlyOnly) {
@@ -159,10 +150,16 @@ function newGame(player) {
       construction: [], training: [], faction: null, alive: true,
       capital: map.capitals[code], tiles: 0, slot: slot++ % 3, divCounter: 0,
     };
+    initFocusState(c);
     S.countries[code] = c;
+    initResearch(c, def);
     if (def.faction) { c.faction = def.faction; S.factions[def.faction].members.push(code); }
   }
   countTiles();
+  for (const code in S.countries) { initLandCountry(S.countries[code]); initCommand(S.countries[code]); }
+  landInitMap();
+  Econ.init();
+  Diplo.init(); Intel.init(); Occupation.init();
   for (const code in S.countries) {
     const c = S.countries[code], def = COUNTRY_DEFS[code];
     c.manpower = c.tiles * 1000 + c.civ * 3000;
@@ -174,7 +171,12 @@ function newGame(player) {
       const t = own[Math.floor(k * own.length / total)];
       createDiv(code, k < def.arm ? 'arm' : 'inf', t.i);
     }
+    c.trucks = c.major ? 600 + def.mil * 60 : 80 + def.mil * 20;
+    c.motorHubs = [];
+    c.autoMotor = code !== player;
+    autoArmies(c);
   }
+  logisticsStep();
   log(`Inizia la partita: guidi ${C(player).name}. Il mondo è in pace... per ora.`, 'good');
   return S;
 }
@@ -191,52 +193,42 @@ function tick() {
   if (START_TS + S.day * DAY_MS >= END_TS) { endGame('time'); return; }
   processEvents();
   countTiles();
-  for (const k in S.countries) if (S.countries[k].alive) economy(S.countries[k]);
+  Econ.worldDaily();
+  for (const k in S.countries) if (S.countries[k].alive && !S.countries[k].capitulated) economy(S.countries[k]);
+  logisticsStep();
+  for (const k in S.countries) if (S.countries[k].alive && !S.countries[k].capitulated) commandStep(S.countries[k]);
   militaryStep();
+  researchTick();
   for (const k in S.countries) {
     const c = S.countries[k];
-    if (c.alive && k !== S.player && (S.day + c.slot) % 3 === 0) aiThink(c);
+    if (c.alive && !c.capitulated && k !== S.player && (S.day + c.slot) % 3 === 0) aiThink(c);
   }
   checkCapitulations();
+  diploTick();
   S.divs = S.divs.filter(d => !d.dead);
   UI.dirty = true;
 }
 
-function factoryCap(c) { return Math.floor(c.tiles * 0.45) + 12; }
+function factoryCap(c) { return Math.floor(c.tiles * 0.45) + 12 + (c.capBonus || 0) + (c.extraSlots || 0); }
 
 function economy(c) {
   c.pp = Math.min(999, c.pp + c.ppGain);
-  c.manpower += c.tiles * 12 * (1 + c.mpBonus);
-  c.equipment += c.mil * 3 * (1 + c.eqBonus);
+  c.manpower += c.tiles * 12 * (1 + c.mpBonus + Econ.manpowerMod(c));
   const isP = c.code === S.player;
-  if (c.construction.length) {
-    const j = c.construction[0];
-    j.prog += Math.max(1, c.civ) * 0.15;
-    if (j.prog >= j.cost) {
-      c[j.type]++;
-      c.construction.shift();
-      if (isP) log(`Completata una nuova fabbrica ${j.type === 'civ' ? 'civile' : 'militare'}.`, 'good');
-    }
-  }
+  Econ.daily(c); // produzione, risorse, commercio e cantieri (economy.js, con ferrovie e hub di land/logistics.js)
   for (let i = c.training.length - 1; i >= 0; i--) {
     const tr = c.training[i];
     if (--tr.days > 0) continue;
     c.training.splice(i, 1);
     const tile = spawnTile(c);
     if (tile >= 0) {
-      const d = createDiv(c.code, tr.type, tile);
+      const d = createDiv(c.code, tr.type, tile, tr.tpl);
+      autoArmies(c);
       if (isP) log(`${divName(d)} è pronta per il combattimento.`, 'good');
     }
   }
-  if (c.focus) {
-    if (--c.focusDays <= 0) {
-      const f = FOCUS_BY_ID[c.focus];
-      f.apply(c);
-      c.done.add(f.id);
-      c.focus = null;
-      if (isP) log(`Focus nazionale completato: ${f.name}.`, 'good');
-    }
-  }
+  researchStep(c);
+  focusDay(c);
 }
 
 function spawnTile(c) {
@@ -247,102 +239,17 @@ function spawnTile(c) {
 
 // ---------- azioni economiche (giocatore e IA) ----------
 function canBuild(c) { return c.civ + c.mil + c.construction.length < factoryCap(c); }
-function queueBuild(c, type) {
-  if (!canBuild(c) || c.construction.length >= 5) return false;
-  c.construction.push({ type, prog: 0, cost: BUILD_COST[type] });
-  return true;
-}
-function canRecruit(c, type) {
-  const ut = UNIT_TYPES[type];
-  if (type === 'arm' && !c.armorTech) return false;
-  return c.equipment >= ut.eq && c.manpower >= ut.mp;
-}
-function recruit(c, type) {
-  if (!canRecruit(c, type)) return false;
-  const ut = UNIT_TYPES[type];
-  c.equipment -= ut.eq; c.manpower -= ut.mp;
-  c.training.push({ type, days: ut.days, total: ut.days });
-  return true;
-}
-function focusAvailable(c, f) {
-  if (c.done.has(f.id) || c.focus === f.id) return false;
-  if (f.req && !f.req.every(r => c.done.has(r) || (r === 'tank' && c.armorTech))) return false;
-  return f.avail ? f.avail(c) : true;
-}
-function startFocus(c, id) {
-  const f = FOCUS_BY_ID[id];
-  if (c.focus || !focusAvailable(c, f)) return false;
-  c.focus = id; c.focusDays = f.days;
-  return true;
-}
+function queueBuild(c, type) { return Econ.queueBuild(c, type); }
+// canRecruit e recruit: vedi land/divisions.js (modelli di divisione, pagati con Econ)
+// focusAvailable e startFocus: vedi focus.js (alberi dei focus nazionali)
 
-// ---------- movimento e combattimento ----------
-function militaryStep() {
-  S.battles = [];
-  const combats = new Map();
-  for (const d of S.divs) d.combat = false;
-  for (const d of S.divs) {
-    if (d.dead) continue;
-    if (!d.path.length) {
-      if (!S.tiles[d.tile].land) returnToLand(d);
-      continue;
-    }
-    const nx = d.path[0], t = S.tiles[nx];
-    if (!passable(d.owner, t)) { d.path = []; d.prog = 0; continue; }
-    if (t.land && hasHostile(nx, d.owner)) {
-      if (d.org < UNIT_TYPES[d.type].org * 0.15) {
-        d.path = []; d.prog = 0;
-        if (d.owner === S.player) log(`${divName(d)} ha interrotto l'attacco: organizzazione esaurita.`, 'warn');
-        continue;
-      }
-      let a = combats.get(nx);
-      if (!a) { a = []; combats.set(nx, a); }
-      a.push(d); d.combat = true;
-      continue;
-    }
-    d.prog += t.land ? speedOf(d) / TERRAIN[t.terrain].cost : SEA_SPEED;
-    if (d.prog >= 1) {
-      d.prog = 0;
-      d.path.shift();
-      moveDiv(d, nx);
-      if (t.land) occupy(t, d.owner);
-    }
-  }
-  for (const [ti, atk] of combats) resolveCombat(ti, atk);
-  for (const d of S.divs) if (!d.dead) recover(d);
-}
-
+// ---------- movimento e combattimento: militaryStep e resolveCombat in land/combat.js ----------
 function occupy(t, owner) {
   if (t.ctrl === owner || !atWar(t.ctrl, owner)) return;
+  Diplo.onOccupy(t, owner);
   // liberazione di un territorio alleato
   t.ctrl = (allied(t.owner, owner) && C(t.owner).alive) ? t.owner : owner;
   S.mapDirty = true;
-}
-
-function resolveCombat(ti, atk) {
-  const t = S.tiles[ti];
-  const a0 = atk[0].owner;
-  const defs = (S.byTile.get(ti) || []).filter(d => !d.dead && atWar(d.owner, a0));
-  if (!defs.length) return;
-  let A = 0, D = 0;
-  for (const d of atk) A += atkValue(d, ti);
-  for (const d of defs) D += defValueOf(d);
-  D *= TERRAIN[t.terrain].def;
-  A *= 0.85 + Math.random() * 0.3;
-  D *= 0.85 + Math.random() * 0.3;
-  const perD = A * 0.5 / defs.length, perA = D * 0.35 / atk.length;
-  for (const d of defs) { d.org = Math.max(0, d.org - perD); d.str -= perD * 0.0035; d.combat = true; }
-  for (const d of atk) { d.org = Math.max(0, d.org - perA); d.str -= perA * 0.0035; }
-  S.battles.push({ to: ti, from: [...new Set(atk.map(d => d.tile))] });
-  for (const d of [...defs, ...atk]) {
-    if (d.str < 0.05) {
-      destroyDiv(d);
-      if (d.owner === S.player) log(`${divName(d)} è stata annientata.`, 'bad');
-    }
-  }
-  if (defs.every(d => d.dead || d.org <= 0.5)) {
-    for (const d of defs) if (!d.dead) retreat(d);
-  }
 }
 
 function retreat(d) {
@@ -375,28 +282,17 @@ function returnToLand(d) {
   else destroyDiv(d);
 }
 
-function recover(d) {
-  const ut = UNIT_TYPES[d.type], c = C(d.owner), t = S.tiles[d.tile];
-  if (d.combat || !t.land) return;
-  const rb = 1 + c.recBonus;
-  d.org = Math.min(ut.org, d.org + (d.path.length ? 1 : 3.5) * rb);
-  if (d.str < 1 && allied(t.ctrl, d.owner)) {
-    const need = Math.min(0.02 * rb, 1 - d.str);
-    const eq = need * ut.eq, mp = need * ut.mp;
-    if (c.equipment >= eq && c.manpower >= mp) { c.equipment -= eq; c.manpower -= mp; d.str += need; }
-  }
-}
-
 // ---------- diplomazia ----------
 function declareWar(a, b) {
-  if (atWar(a, b) || allied(a, b)) return;
+  if (atWar(a, b) || allied(a, b) || C(b).capitulated) return;
   const defenders = new Set(membersOf(b));
   for (const g of S.guarantees) if (g.to === b && C(g.by).alive) membersOf(g.by).forEach(x => defenders.add(x));
   S.guarantees = S.guarantees.filter(g => !(g.by === a && g.to === b));
   for (const y of defenders) {
-    if (y === a || allied(a, y) || !C(y).alive) continue;
+    if (y === a || allied(a, y) || !C(y).alive || C(y).capitulated) continue;
     S.wars.add(warKey(a, y));
   }
+  Diplo.onWar(a, b);
   const cls = involvesPlayer(a, ...defenders) ? 'bad' : '';
   log(`${C(a).name} dichiara guerra a ${C(b).name}!`, cls);
   const joined = [...defenders].filter(y => y !== b && atWar(a, y));
@@ -435,13 +331,15 @@ function guarantee(by, to) {
 function annex(actor, target) {
   const a = C(actor), b = C(target);
   for (const t of S.tiles) {
-    if (t.owner === target) { t.owner = actor; if (t.ctrl === target) t.ctrl = actor; }
+    if (t.owner === target) { t.owner = actor; if (t.core === target) t.core = actor; if (t.ctrl === target) t.ctrl = actor; }
     else if (t.ctrl === target) t.ctrl = t.owner;
   }
   a.civ += b.civ; a.mil += b.mil;
   a.equipment += b.equipment * 0.5; a.manpower += b.manpower * 0.5;
-  for (const d of S.divs) if (d.owner === target && !d.dead) { d.owner = actor; d.num = ++a.divCounter; d.path = []; }
+  for (const d of S.divs) if (d.owner === target && !d.dead) { d.owner = actor; d.num = ++a.divCounter; d.path = []; d.tpl = (resolveTpl(a, d.type) || a.templates[0]).id; d.army = null; invalidateLand(d); }
+  autoArmies(a);
   killCountry(target);
+  Diplo.onAnnex(actor);
   log(`${a.name} ha annesso ${b.name}.`, involvesPlayer(actor, target) ? 'bad' : '');
   if (target === S.player) endGame('annexed');
 }
@@ -451,8 +349,11 @@ function killCountry(code) {
   c.alive = false;
   c.construction = []; c.training = []; c.focus = null;
   if (c.faction) leaveFaction(code);
-  for (const k of [...S.wars]) if (k.includes(code)) S.wars.delete(k);
+  for (const k of [...S.wars]) if (warSides(k).includes(code)) S.wars.delete(k);
   S.guarantees = S.guarantees.filter(g => g.by !== code && g.to !== code);
+  S.naps = S.naps.filter(n => n.a !== code && n.b !== code);
+  for (const k in S.countries) if (S.countries[k].overlord === code) { S.countries[k].overlord = null; S.countries[k].autonomy = null; }
+  c.overlord = null; c.autonomy = null; c.capitulated = false;
   S.mapDirty = true;
 }
 
@@ -466,13 +367,16 @@ function checkCapitulations() {
   }
   for (const code in S.countries) {
     const c = S.countries[code];
-    if (!c.alive || !tot[code] || !enemiesOf(code).length) continue;
-    const ratio = (held[code] || 0) / tot[code];
+    if (!c.alive || c.capitulated || !tot[code] || !enemiesOf(code).length) continue;
+    const ratio = (held[code] || 0) / tot[code] - c.nukeShock;
     const capLost = !allied(S.tiles[c.capital].ctrl, code);
-    if (ratio < 0.33 || (capLost && ratio < 0.55)) capitulate(code);
+    if (ratio < 0.33 + c.collabBonus || (capLost && ratio < 0.55 + c.collabBonus)) capitulate(code);
   }
 }
 
+// Come in HOI4: il paese capitolato perde l'esercito e il territorio resta occupato,
+// ma resta in guerra (governo in esilio) finché i suoi alleati combattono.
+// Il territorio cambia proprietario solo alla conferenza di pace (vedi Peace in diplomacy.js).
 function capitulate(code) {
   const c = C(code);
   const enemies = new Set(enemiesOf(code));
@@ -482,18 +386,23 @@ function capitulate(code) {
   if (!main) return;
   for (const t of S.tiles) {
     if (t.owner === code) {
-      if (enemies.has(t.ctrl)) t.owner = t.ctrl;
-      else t.owner = t.ctrl = main;
+      if (!enemies.has(t.ctrl)) t.ctrl = main;
     } else if (t.ctrl === code) {
-      t.ctrl = C(t.owner).alive ? t.owner : main;
+      t.ctrl = C(t.owner).alive && !C(t.owner).capitulated ? t.owner : main;
     }
   }
-  const m = C(main);
-  m.civ += Math.round(c.civ * 0.4); m.mil += Math.round(c.mil * 0.4);
   for (const d of S.divs) if (d.owner === code) destroyDiv(d);
-  killCountry(code);
-  log(`${c.name} ha capitolato! ${m.name} ne prende il controllo.`, involvesPlayer(code, main) ? (allied(main, S.player) ? 'good' : 'bad') : 'big');
-  // le divisioni rimaste in territorio ora neutrale tornano a casa
+  c.capitulated = true;
+  c.construction = []; c.training = []; c.focus = null;
+  Diplo.addTension(TENSION_GAIN.capitulation);
+  S.mapDirty = true;
+  log(`${c.name} ha capitolato! ${C(main).name} ne occupa il territorio.`, involvesPlayer(code, main) ? (allied(main, S.player) ? 'good' : 'bad') : 'big');
+  sendHomeStrays();
+  if (code === S.player) endGame('capitulated');
+}
+
+// le divisioni rimaste in territorio ora neutrale tornano a casa
+function sendHomeStrays() {
   for (const d of S.divs) {
     if (d.dead) continue;
     const t = S.tiles[d.tile];
@@ -502,7 +411,6 @@ function capitulate(code) {
       if (home >= 0) { moveDiv(d, home); d.path = []; } else destroyDiv(d);
     }
   }
-  if (code === S.player) endGame('capitulated');
 }
 
 // ---------- eventi ----------
@@ -516,9 +424,9 @@ function processEvents() {
 
 function runEvent(ev) {
   const a = C(ev.actor);
-  if (!a.alive) return;
+  if (!a.alive || a.capitulated || a.overlord) return;
   const tg = ev.target ? C(ev.target) : null;
-  if (tg && !tg.alive) return;
+  if (tg && (!tg.alive || tg.capitulated)) return;
   const isActor = ev.actor === S.player, isTarget = ev.target === S.player;
   switch (ev.type) {
     case 'annex':
@@ -551,38 +459,17 @@ function runEvent(ev) {
 }
 
 // ---------- azioni del giocatore ----------
-const PP_COST = { war: 100, guarantee: 25, faction: 50, create: 80 };
-function playerSpend(cost) {
-  const p = C(S.player);
-  if (p.pp < cost) { log(`Potere politico insufficiente (servono ${cost}).`, 'warn'); return false; }
-  p.pp -= cost;
-  return true;
+// passano tutte da Diplo (diplomacy.js), che controlla tensione mondiale, obiettivi di guerra e costi
+const PP_COST = { war: 0, guarantee: 25, faction: 50, create: 80 }; // compatibilità con il vecchio pannello
+function playerDo(r) {
+  log(r.msg, r.ok ? 'good' : 'warn');
+  return r.ok;
 }
-function playerDeclareWar(target) {
-  if (!playerSpend(PP_COST.war)) return;
-  declareWar(S.player, target);
-}
-function playerGuarantee(target) {
-  if (!playerSpend(PP_COST.guarantee)) return;
-  guarantee(S.player, target);
-}
-function playerCreateFaction() {
-  if (C(S.player).faction || !playerSpend(PP_COST.create)) return;
-  createFaction(S.player);
-}
-function playerInvite(target) {
-  const p = C(S.player), t = C(target);
-  if (!p.faction || t.faction || atWar(S.player, target) || !playerSpend(PP_COST.faction)) return;
-  const sharedEnemy = enemiesOf(target).some(e => atWar(e, S.player));
-  if (sharedEnemy || Math.random() < (t.major ? 0.15 : 0.4)) joinFaction(target, p.faction);
-  else log(`${t.name} ha rifiutato l'invito nella fazione.`, 'warn');
-}
-function playerAskJoin(target) {
-  const p = C(S.player), f = S.factions[C(target).faction];
-  if (p.faction || !f || f.members.some(m => atWar(m, S.player)) || !playerSpend(PP_COST.faction)) return;
-  if (Math.random() < (p.major ? 0.4 : 0.7)) joinFaction(S.player, f.id);
-  else log(`${f.name} ha respinto la tua richiesta di adesione.`, 'warn');
-}
+function playerDeclareWar(target) { return playerDo(Diplo.declareWar(S.player, target)); }
+function playerGuarantee(target) { return playerDo(Diplo.guarantee(S.player, target)); }
+function playerCreateFaction() { return playerDo(Diplo.createFaction(S.player)); }
+function playerInvite(target) { return playerDo(Diplo.inviteToFaction(S.player, target)); }
+function playerAskJoin(target) { return playerDo(Diplo.askToJoinFaction(S.player, target)); }
 
 function orderMove(divs, dest) {
   const t = S.tiles[dest];

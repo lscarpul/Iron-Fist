@@ -12,6 +12,9 @@
     "dist": "electron-builder",
     "dist:win": "electron-builder --win"
   },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.3.0"
+  },
   "devDependencies": {
     "electron": "44.9.3",
     "electron-builder": "26.17.0"
@@ -20,8 +23,8 @@
     "appId": "com.lscarpul.ironfist",
     "productName": "Iron Fist",
     "files": ["electron/**", "game/**", "package.json"],
-    "directories": { "output": "dist" },
-    "win": { "target": ["nsis", "portable"] },
+    "directories": { "output": "dist", "buildResources": "build" },
+    "win": { "target": ["nsis", "portable"], "icon": "build/icon.ico" },
     "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "shortcutName": "Iron Fist" },
     "portable": { "artifactName": "IronFist-${version}-portable.exe" },
     "linux": { "target": ["AppImage"] },
