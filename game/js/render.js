@@ -564,6 +564,16 @@ const Render = {
         ctx.fillRect(x, y + chh, cw, bh);
         ctx.fillStyle = org > 0.6 ? '#5fd35f' : org > 0.3 ? '#e2c044' : '#e0503c';
         ctx.fillRect(x, y + chh, cw * Math.max(0, Math.min(1, org)), bh);
+        // bonus di pianificazione (barra verde sopra il segnalino, come in HOI4)
+        if (isMine) {
+          let pl = 0;
+          for (const d of g) pl += d.plan || 0;
+          pl /= g.length * ((c.planMax ?? 0.3) || 0.3);
+          if (pl > 0.01) {
+            ctx.fillStyle = '#1a1a1a'; ctx.fillRect(x, y - bh - 0.5 * lw, cw, bh);
+            ctx.fillStyle = '#3ddc84'; ctx.fillRect(x, y - bh - 0.5 * lw, cw * Math.min(1, pl), bh);
+          }
+        }
         if (g.some(d => d.combat)) {
           ctx.fillStyle = '#ff4030';
           ctx.beginPath(); ctx.arc(x + cw, y, 3.2 * k0 * lw, 0, 7); ctx.fill();

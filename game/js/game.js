@@ -471,17 +471,23 @@ function playerCreateFaction() { return playerDo(Diplo.createFaction(S.player));
 function playerInvite(target) { return playerDo(Diplo.inviteToFaction(S.player, target)); }
 function playerAskJoin(target) { return playerDo(Diplo.askToJoinFaction(S.player, target)); }
 
-function orderMove(divs, dest) {
+// opt.rail: trasferimento strategico in treno (solo territorio amico, organizzazione a zero)
+function orderMove(divs, dest, opt = {}) {
   const t = S.tiles[dest];
   if (!t.land) return;
   let ok = 0, fail = 0;
   for (const d of divs) {
     if (d.dead) continue;
-    const p = findPath(d.owner, d.tile, dest);
+    let p;
+    if (opt.rail) {
+      if (!S.tiles[d.tile].land || !allied(t.ctrl, d.owner) || d.combat) { fail++; continue; }
+      p = d.tile === dest ? [] : buildPath(dijkstra(d.owner, d.tile, dest, true).prev, d.tile, dest);
+    } else p = findPath(d.owner, d.tile, dest);
     if (p === null) { fail++; continue; }
     // mantieni l'avanzamento se il primo passo è lo stesso
-    if (!(d.path.length && p.length && d.path[0] === p[0])) d.prog = 0;
-    d.path = p; ok++;
+    if (!(d.path.length && p.length && d.path[0] === p[0]) || !!opt.rail !== !!d.strat) d.prog = 0;
+    d.path = p; d.strat = !!opt.rail && p.length > 0; ok++;
+    if (d.strat) { d.org = 0; d.plan = 0; }
   }
   if (fail) log(`${fail} divisione/i non possono raggiungere quella destinazione (territorio neutrale?).`, 'warn');
   return ok;

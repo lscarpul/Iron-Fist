@@ -42,6 +42,7 @@ function assignFM(c, aid, gid) {
   if (!a || !g || g.rank !== 'fm') return;
   a.fm = gid;
 }
+const fmArmyCount = (c, gid) => c.armies.filter(a => a.fm === gid).length;
 function assignDivsToArmy(c, divs, aid) {
   for (const d of divs) if (d.owner === c.code) d.army = aid;
 }
@@ -59,12 +60,18 @@ function divFM(d) {
 }
 // bonus di comando applicati alla divisione
 function commandMods(d) {
-  const m = { atk: 0, def: 0, brk: 0, plan: 0, planSpeed: 0, speed: 0, entrench: 0, winter: false, terrain: 0, special: 0 };
-  const g = divGeneral(d), fm = divFM(d);
-  if (!g && !fm) return m;
+  const m = { atk: 0, def: 0, brk: 0, plan: 0, planSpeed: 0, speed: 0, entrench: 0, winter: false, terrain: 0, terrainPen: 0, special: 0 };
+  if (d.army == null) return m;
   const c = C(d.owner), a = armyById(c, d.army);
+  if (!a) return m;
   const n = (S.armyCount && S.armyCount.get(c.code + ':' + a.id)) || 0;
   const over = n > ARMY_MAX_DIVS ? ARMY_MAX_DIVS / n : 1; // troppe divisioni: il comando si diluisce
+  if (n > ARMY_MAX_DIVS) { const pen = Math.min(0.3, (n - ARMY_MAX_DIVS) * 0.02); m.atk -= pen; m.def -= pen; } // e arriva un malus
+  const g = divGeneral(d), fm = divFM(d);
+  if (!g && !fm) return m;
+  // un feldmaresciallo coordina bene fino a FM_MAX_ARMIES armate: oltre, il suo 50% si diluisce
+  const fmArmies = fm ? c.armies.filter(x => x.fm === fm.id).length : 0;
+  const fmK = 0.5 * (fmArmies > FM_MAX_ARMIES ? FM_MAX_ARMIES / fmArmies : 1);
   const st = tplStats(d), ter = S.tiles[d.tile].terrain;
   const apply = (gg, k) => {
     m.atk += gg.atk * 0.05 * k * over;
@@ -79,10 +86,12 @@ function commandMods(d) {
       if (t === 'montanaro' && (ter === 'hills' || ter === 'mountain')) m.terrain += 0.15 * k;
       if (t === 'pianificatore') m.plan += 0.1 * k;
       if (t === 'commando' && st.special) m.special += 0.1 * k;
+      if (t === 'astuto') m.terrainPen += 0.1 * k;
+      if (t === 'pianificatore_rapido') m.planSpeed += 0.25 * k;
     }
   };
   if (g) apply(g, 1);
-  if (fm) apply(fm, 0.5);
+  if (fm) apply(fm, fmK);
   return m;
 }
 
@@ -95,14 +104,23 @@ function generalGainXP(c, g, v) {
     const k = keys[Math.floor(Math.random() * 4)];
     g[k] = Math.min(9, g[k] + 1);
     if (c.code === S.player) log(`${g.name} sale al livello ${g.level}.`, 'good');
+    // combattendo i comandanti possono sviluppare un tratto nuovo
+    const free = Object.keys(GENERAL_TRAITS).filter(t => !g.traits.includes(t) && (!GENERAL_TRAITS[t].fm || g.rank === 'fm'));
+    if (free.length && g.traits.length < 4 && Math.random() < 0.35) {
+      const t = free[Math.floor(Math.random() * free.length)];
+      g.traits.push(t);
+      if (c.code === S.player) log(`${g.name} ha sviluppato il tratto «${GENERAL_TRAITS[t].name}».`, 'good');
+    }
   }
 }
 
 // ---------- potere di comando ----------
-function cpMax(c) { return CP_MAX + 10 * c.generals.filter(g => g.rank === 'fm').length; }
+function cpMax(c) { return CP_MAX; }
 function commandStep(c) {
   const fm = c.generals.filter(g => g.rank === 'fm').length;
   c.cp = Math.min(cpMax(c), (c.cp || 0) + CP_BASE + 0.1 * fm);
+  battlePlanStep(c);
+  abilityStep(c);
   // esperienza dell'esercito: addestramento in pace, molto di più in guerra
   const nd = S.divs.filter(d => d.owner === c.code && !d.dead).length;
   addArmyXP(c, 0.02 + nd * 0.002 + (enemiesOf(c.code).length ? 0.1 : 0));

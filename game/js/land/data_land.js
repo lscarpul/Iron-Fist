@@ -123,7 +123,7 @@ const LAND_DEV = {
 };
 
 // ---------- comando ----------
-const ARMY_MAX_DIVS = 24;
+const ARMY_MAX_DIVS = 24, FM_MAX_ARMIES = 5;
 const CP_BASE = 0.5, CP_MAX = 100;
 const CP_COST = { general: 20, promote: 30, trait: 20 };
 const GENERAL_TRAITS = {
@@ -136,6 +136,8 @@ const GENERAL_TRAITS = {
   montanaro: { name: 'Montanaro', desc: '+15% in colline e montagna' },
   pianificatore: { name: 'Pianificatore', desc: '+10% pianificazione massima' },
   commando: { name: 'Comandante di commando', desc: '+10% attacco delle forze speciali, +12 limite forze speciali' },
+  astuto: { name: 'Astuto (Trickster)', desc: 'Penalità di fiumi e terreni difficili ridotte del 10%' },
+  pianificatore_rapido: { name: 'Pianificatore rapido', desc: '+25% velocità di pianificazione (solo feldmarescialli)', fm: true },
 };
 // generali storici: [nome, feldmaresciallo?, attacco, difesa, pianificazione, logistica, tratti]
 const GENERALS = {

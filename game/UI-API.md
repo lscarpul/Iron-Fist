@@ -54,3 +54,14 @@ Altri hook:
 - `table.tbl` tabelle compatte; `.slot` slot (ricerca/produzione), `.empty` stato vuoto
 - `icon('factory')` → SVG inline 16px; lista in `game/js/icons.js`
 - `flag(country)` bandiera piccola, `flagBig(country)` grande
+
+## Strumenti sulla mappa e comandi dell'esercito
+- `UI.setMapTool({ hint, down(ti, e), move(ti, e), up(ti, e), cancel() })`: il tasto sinistro sulla mappa va allo
+  strumento invece che alla selezione (usato dai piani di battaglia in `panels/armata.js`). `UI.setMapTool(null)` lo chiude;
+  Esc e il clic destro lo annullano. `hint` compare in alto al centro.
+- Mouse sulla mappa: sinistro = clic/riquadro di selezione (Shift o Ctrl aggiungono), destro o centrale trascinati = sposta la
+  mappa, clic destro = muovi/attacca (`orderMove`), Ctrl+clic destro = trasferimento in treno (`orderMove(divs, ti, { rail: true })`).
+- Tastiera: numeri = gruppi di controllo (`UI.ctrlGroup`, salvati in `S.ctrlGroups`), Ctrl+numero li salva, due volte centra
+  la camera; + e − la velocità; frecce spostano la mappa.
+- La barra delle armate (`#armybar`) è disegnata da `panels/armata.js` agganciandosi a `UI.update`; imposta `--armybar-h`
+  su `#game` così `#unitbar` le sta sopra.
