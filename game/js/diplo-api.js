@@ -53,7 +53,7 @@ const DiploAPI = {
 const country = { type: 'string', description: 'Paese: codice (es. "G") o nome (es. "Germania")' };
 const DIPLO_ACTIONS = [
   ['migliora_relazioni', `Migliora l'opinione di un paese verso di te (+15). Costo ${DIPLO_COST.improve} potere politico.`, { paese: country }, a => Diplo.improveRelations(S.player, a.paese)],
-  ['giustifica_obiettivo_guerra', `Inizia a giustificare un obiettivo di guerra (45-70 giorni). Costo ${DIPLO_COST.justify} PP (+${DIPLO_COST.justifyMajor} contro grandi potenze). Serve tensione mondiale sopra la soglia della tua ideologia. tipo: "conquest" (territori) o "puppet" (stato fantoccio).`,
+  ['giustifica_obiettivo_guerra', `Inizia a giustificare un obiettivo di guerra (45-70 giorni): è l'azione per "giustifica annessione/conquista/guerra". Non annette nulla: quando è pronto permette di dichiarare guerra. Costo ${DIPLO_COST.justify} PP (+${DIPLO_COST.justifyMajor} contro grandi potenze). Serve tensione mondiale sopra la soglia della tua ideologia. tipo: "conquest" (territori) o "puppet" (stato fantoccio).`,
     { paese: country, tipo: { type: 'string', enum: ['conquest', 'puppet'] } }, a => Diplo.justifyWargoal(S.player, a.paese, a.tipo || 'conquest')],
   ['annulla_obiettivo_guerra', 'Annulla un obiettivo di guerra in giustificazione o pronto.', { paese: country }, a => Diplo.cancelWargoal(S.player, a.paese)],
   ['dichiara_guerra', 'Dichiara guerra. Serve un obiettivo di guerra pronto, oppure che il bersaglio sia in guerra con un tuo alleato. Garanti e fazione del bersaglio entrano in guerra.', { paese: country }, a => Diplo.declareWar(S.player, a.paese)],
@@ -64,7 +64,7 @@ const DIPLO_ACTIONS = [
   ['lascia_fazione', 'Lascia la tua fazione (non in guerra).', {}, () => Diplo.leaveFaction(S.player)],
   ['patto_non_aggressione', `Proponi un patto di non aggressione. Costo ${DIPLO_COST.nap} PP. Blocca obiettivi di guerra tra i due.`, { paese: country }, a => Diplo.signNap(S.player, a.paese)],
   ['rompi_patto', 'Rompi un patto di non aggressione: grave perdita di opinione con tutti.', { paese: country }, a => Diplo.breakNap(S.player, a.paese)],
-  ['pretesa_annessione', `Pretesa stile Monaco: annetti un paese minore senza guerra. Costo ${DIPLO_COST.demand} PP. Accetta solo se isolato (nessuna fazione o garante) e tu sei almeno 3 volte più forte.`, { paese: country }, a => Diplo.demandAnnexation(S.player, a.paese)],
+  ['pretesa_annessione', `Pretesa stile Monaco: chiedi a un paese minore di farsi annettere subito, senza guerra. Usala solo se il leader chiede espressamente di pretendere o annettere subito, mai per "giustificare". Costo ${DIPLO_COST.demand} PP. Accetta solo se isolato (nessuna fazione o garante) e tu sei almeno 3 volte più forte.`, { paese: country }, a => Diplo.demandAnnexation(S.player, a.paese)],
   ['lend_lease', 'Invia equipaggiamento a un paese. quantita = una tantum; al_giorno = invio giornaliero continuo (0 per sospenderlo).',
     { paese: country, quantita: { type: 'number' }, al_giorno: { type: 'number' } },
     a => a.al_giorno != null ? Diplo.setLendLease(S.player, a.paese, a.al_giorno) : Diplo.lendLease(S.player, a.paese, a.quantita)],
