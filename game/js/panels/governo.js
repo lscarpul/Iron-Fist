@@ -501,6 +501,8 @@ function pickTools(all, text, mode) {
     const world = all.filter(x => !gov.has(x.name));
     if (WORLD_WORDS.test(t)) { hit = true; for (const x of world) want.add(x.name); }
   }
+  // "giustifica l'annessione": solo la giustificazione, niente strumenti che annettono subito
+  if (/giustific/.test(t) && !/pretend|pretes|ultimatum|subito/.test(t)) { want.delete('pretesa_annessione'); want.delete('annetti_paese'); }
   // ordine generico ("che facciamo?"): le azioni più comuni
   if (!hit) for (const x of all) if (/migliora_relazioni|costruisci|start_national_focus|notizia/.test(x.name)) want.add(x.name);
   return all.filter(x => want.has(x.name));
